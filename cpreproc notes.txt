@@ -1,0 +1,121 @@
+https://boxbase.org/entries/2019/oct/14/lr1-parsing-tables/
+
+https://gcc.gnu.org/onlinedocs/cpp/Overview.html
+
+https://learn.microsoft.com/en-us/cpp/preprocessor/grammar-summary-c-cpp?view=msvc-170
+
+https://medium.com/@pasi_pyrro/how-to-write-your-own-c-compiler-from-scratch-with-python-90ab84ffe071
+
+
+tokenizer
+    token
+        type
+            keyword
+            identifier
+            num const
+            symbol
+            whitespace
+            comment
+        value
+
+parser
+
+
+https://en.wikipedia.org/wiki/C_preprocessor
+
+    #define HE HI
+    #define LLO _THERE
+    #define HELLO "HI THERE"
+    #define CAT(a,b) a##b
+    #define XCAT(a,b) CAT(a,b)
+    #define CALL(fn) fn(HE,LLO)
+
+
+    CAT(HE, LLO) // "HI THERE", because concatenation occurs before normal expansion
+    XCAT(HE, LLO) // HI_THERE, because the tokens originating from parameters ("HE" and "LLO") are expanded first
+    CALL(CAT) // "HI THERE", because this evaluates to CAT(a,b)
+
+
+    Function-like macro expansion occurs in the following stages:
+
+        Stringification operations are replaced with the textual representation of their argument's replacement list (without performing expansion).
+        Parameters are replaced with their replacement list (without performing expansion).
+        Concatenation operations are replaced with the concatenated result of the two operands (without expanding the resulting token).
+        Tokens originating from parameters are expanded.
+        The resulting tokens are expanded as normal.
+
+#define BLA 1 + 2
+
+(punct, #), (ident, BLA) (number, 1) (punct, +) (number, 2)
+
+
+
+hdr/a.h
+#define A
+
+
+src_b\b.h
+#include "hdr\a.h"
+
+
+src_c\c.h
+#include "src_b\b.h"
+
+
+main.c
+#include "src_c\c.h"
+
+
+"" src_c src_b hdr
+
+                        a
+
+#if 1                   a->a
+    #if 0               a, a->s
+        #if 1           a, s, s->i
+
+        #else           a, s, i
+
+        #endif          a, s
+    #elif 1             a, s->a
+        #if 0           a, a, a->s
+
+        #else           a, a, s->a
+
+        #endif          a, a
+    #else               a, a->i
+
+    #endif              a
+#else                   a->i
+    #if 1               i, i->i
+
+    #endif              i
+#endif
+
+if:
+    if state == a:
+        evaluate if condition
+        condition true:
+            state = a 
+        condition false:
+            state = s
+    else:                           //  state == s or i
+        state = i                   //  do not evaluate
+
+else_if:
+    if state == s:
+        evaluate if condition
+        condition true:
+            state = a 
+        condition false:
+            state = s
+    else:
+        state = i
+
+
+if must be always evaluated, unless the parent is not active
+* no need to evaluate condition, because parent is not active
++ elif/else branch must be evaluated because none of the previous current branches is active
+- 
+
+parent_branch_active, current_branch_active
