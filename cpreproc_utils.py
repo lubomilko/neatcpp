@@ -1,10 +1,10 @@
 import re
 from pathlib import Path
-from enum import IntEnum
+from typing import Generator
 from logger import log
 
 
-class FileManager():
+class FileIO():
     def __init__(self) -> None:
         self.incl_dir_paths: list[Path] = [Path("")]
 
@@ -35,12 +35,88 @@ class FileManager():
         return file_code
 
 
+class CodeFormatter():
+    RE_PTRN_MLINE_CMNT = re.compile(r"/\*.*?\*/", re.ASCII + re.DOTALL)
+    RE_PTRN_SLINE_CMNT = re.compile(r"//[^\n]*", re.ASCII)
+
+    @staticmethod
+    def replace_tabs(code: str, tab_size: int = 4) -> str:
+        out_code = ""
+        for line in code.splitlines():
+            tab_pos = line.find("\t")
+            while tab_pos >= 0:
+                line = line.replace("\t", f"{(tab_size - (tab_pos % tab_size)) * ' '}", 1)
+                tab_pos = line.find("\t")
+            out_code = f"{out_code}{line}\n"
+        return out_code
+
+    @staticmethod
+    def remove_line_continuations(code: str, keep_newlines: bool = False) -> str:
+        out_code = ""
+        for line in code.splitlines():
+            if line.rstrip().endswith("\\"):
+                line = line[: -1].rstrip()
+                if keep_newlines:
+                    out_code = f"{out_code}{line}\n"
+                else:
+                    line = line.lstrip()
+                    out_code = f"{out_code}{line} "
+            else:
+                out_code = f"{out_code}{line}\n"
+        return out_code
+
+    @staticmethod
+    def remove_comments(code: str, replace_with_spaces: bool = False, replace_with_newlines: bool = False) -> str:
+        def __repl_with_spaces(match: re.Match) -> str:
+            return re.sub("[^\n]+", lambda m: " " * len(m.group()), match.group())
+
+        def __repl_with_newlines(match: re.Match) -> str:
+            return "\n" * match.group().count("\n")
+
+        out_code = code
+        if replace_with_spaces:
+            out_code = CodeFormatter.RE_PTRN_MLINE_CMNT.sub(__repl_with_spaces, out_code)
+            out_code = CodeFormatter.RE_PTRN_SLINE_CMNT.sub(__repl_with_spaces, out_code)
+        elif replace_with_newlines:
+            out_code = CodeFormatter.RE_PTRN_MLINE_CMNT.sub(__repl_with_newlines, out_code)
+            out_code = CodeFormatter.RE_PTRN_SLINE_CMNT.sub(__repl_with_newlines, out_code)
+        return out_code
+
+
+class CodeSection():
+    def __init__(self) -> None:
+        self.lines: list[str] = []
+        self.line_idx: int = 0
+
+    @property
+    def code(self) -> str:
+        return "\n".join(self.lines)
+
+    @code.setter
+    def code(self, code: str) -> None:
+        self.lines = code.splitlines()
+        self.line_idx = 0
+
+    def get_next_section(self) -> Generator["CodeSection", None, None]:
+        code_lines_num = len(self.lines)
+        while self.line_idx < code_lines_num:
+            out = CodeSection()
+            while self.line_idx < code_lines_num:
+                line = self.lines[self.line_idx].rstrip()
+                self.line_idx += 1
+                out.lines.append(line.rstrip())
+                if not line.endswith("\\"):
+                    break
+            yield out
+
+    def append_section(self, new_section: "CodeSection") -> None:
+        self.lines.extend(new_section.lines)
+
+
 class Evaluator():
     @staticmethod
-    def evaluate_expression(expression: str) -> any:
-        # TODO: Add expansion of all macros.
-        # TODO: Add evaluation of defined(bla) macros.
-
+    def evaluate(expression: str) -> any:
+        # Expression must already be preprocessed, i.e., lines joined, comments removed, macros expanded.
         expression = expression.replace("&&", " and ").replace("||", " or ").replace("/", "//")
         re.sub(r"!([^?==])", r" not \1", expression)
 
@@ -52,62 +128,10 @@ class Evaluator():
 
         return output
 
-    def test_expression(self, expression: str) -> bool:
-        state = self.evaluate_expression(expression)
+    def is_true(self, expression: str) -> bool:
+        state = self.evaluate(expression)
 
         if type(state) is str:
             return False
 
         return bool(state)
-
-
-class ConditionManager():
-    class BranchState(IntEnum):
-        ACTIVE = 0  # if/elif/else branch code is active and if/elif/else condition is true.
-        SEARCH = 1  # if/elif/else branch code is active and if condition is not true, so search for true elif/else condition.
-        IGNORE = 2  # if/elif/else branch code is not active, i.e. the condition does not have to be evaluated anymore.
-
-    def __init__(self) -> None:
-        self.branch_state: self.BranchState = self.BranchState.ACTIVE
-        self.branch_state_stack: list[self.BranchState] = []
-
-    @property
-    def branch_depth(self) -> int:
-        return len(self.branch_state_stack)
-
-    def enter_if(self, expression_flag: bool) -> None:
-        self.branch_state_stack.append(self.branch_state)
-        if self.branch_state == self.BranchState.ACTIVE:
-            if not expression_flag:
-                self.branch_state = self.BranchState.SEARCH
-        else:
-            self.branch_state = self.BranchState.IGNORE
-
-    def enter_elif(self, expression_flag: bool) -> None:
-        if self.branch_state == self.BranchState.SEARCH:
-            if expression_flag:
-                self.branch_state = self.BranchState.ACTIVE
-        else:
-            self.branch_state = self.BranchState.IGNORE
-
-    def exit_if(self) -> None:
-        if self.branch_depth > 0:
-            self.branch_state = self.branch_state_stack.pop()
-        else:
-            log.err("Unexpected #endif detected.")
-
-
-class TextProcessor():
-    def __init__(self) -> None:
-        pass
-
-    @staticmethod
-    def replace_tabs(code: str, tab_size: int = 4) -> str:
-        out_code = ""
-        for line in code.splitlines():
-            tab_pos = line.find("\t")
-            while tab_pos >= 0:
-                line.replace("\t", f"{(tab_size - (tab_pos % tab_size)) * ' '}")
-                tab_pos = line.find("\t")
-            out_code = f"{out_code}\n{line}"
-        return out_code

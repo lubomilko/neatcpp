@@ -119,3 +119,12 @@ if must be always evaluated, unless the parent is not active
 - 
 
 parent_branch_active, current_branch_active
+
+
+evaluate
+    preprocess text
+    process directives
+        expand macros
+    
+    replace c strings to make them work in python
+    call eval(...)

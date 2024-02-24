@@ -1,6 +1,6 @@
 
 #define bla 0 /* This is a comment:
-    
+
     everything should be ignored. */
 
 #if 0
@@ -11,11 +11,11 @@
 */
 #define MACRO_X     (a + b)
 
-#define	MACRO_Y		(c + \
+#define MACRO_Y     (c + \
     d)
 
 #define MACRO_Z     \
-	/* some formula */\
+    /* some formula */\
     (e + f) * \
     (g + h)
 
