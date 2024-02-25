@@ -87,6 +87,8 @@ class CodeSection():
     def __init__(self) -> None:
         self.lines: list[str] = []
         self.line_idx: int = 0
+        self.has_escaped_lines: bool = False
+        self.has_multiline_comment: bool = False
 
     @property
     def code(self) -> str:
@@ -101,12 +103,29 @@ class CodeSection():
         code_lines_num = len(self.lines)
         while self.line_idx < code_lines_num:
             out = CodeSection()
-            while self.line_idx < code_lines_num:
-                line = self.lines[self.line_idx].rstrip()
-                self.line_idx += 1
-                out.lines.append(line.rstrip())
-                if not line.endswith("\\"):
-                    break
+            line = self.lines[self.line_idx].rstrip()
+            out.lines.append(line)
+            self.line_idx += 1
+            # Detect and extract continuous line split to lines ending with "\".
+            if line.endswith("\\"):
+                while self.line_idx < code_lines_num:
+                    line = self.lines[self.line_idx].rstrip()
+                    out.lines.append(line)
+                    self.line_idx += 1
+                    if not line.endswith("\\"):
+                        break
+                out.has_escaped_lines = True
+            # Detect and extract multiline comment.
+            if "/*" in line and "*/" not in line:
+                while self.line_idx < code_lines_num:
+                    line = self.lines[self.line_idx].rstrip()
+                    out.lines.append(line)
+                    self.line_idx += 1
+                    if "*/" in line:
+                        break
+                else:
+                    log.err("Unterminated comment detected.")
+                out.has_multiline_comment = True
             yield out
 
     def append_section(self, new_section: "CodeSection") -> None:
