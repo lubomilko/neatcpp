@@ -51,7 +51,7 @@ class CodeFormatter():
         return out_code
 
     @staticmethod
-    def remove_line_continuations(code: str, keep_newlines: bool = False) -> str:
+    def remove_line_escapes(code: str, keep_newlines: bool = False) -> str:
         out_code = ""
         for line in code.splitlines():
             if line.rstrip().endswith("\\"):
@@ -138,19 +138,15 @@ class Evaluator():
         # Expression must already be preprocessed, i.e., lines joined, comments removed, macros expanded.
         expression = expression.replace("&&", " and ").replace("||", " or ").replace("/", "//")
         re.sub(r"!([^?==])", r" not \1", expression)
-
         try:
             # TODO: Make eval more safe by restricting certain commands or whole imports.
             output = eval(expression)
         except (SyntaxError, NameError, TypeError, ZeroDivisionError):
             output = False
-
         return output
 
     def is_true(self, expression: str) -> bool:
         state = self.evaluate(expression)
-
         if type(state) is str:
             return False
-
         return bool(state)
