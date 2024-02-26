@@ -1,6 +1,6 @@
 import re
 from enum import IntEnum
-from cpreproc_utils import FileIO, CodeFormatter, CodeSection
+from cpreproc_utils import FileIO, CodeFormatter, CodeSection, Evaluator
 from logger import log
 
 
@@ -66,7 +66,7 @@ class CPreprocessor():
         code_sect = CodeSection()
         code = CodeFormatter.replace_tabs(code)
         # code = CodeFormatter.remove_comments(code, replace_with_newlines=True)
-        # code = CodeFormatter.remove_line_continuations(code, True)
+        # code = CodeFormatter.remove_line_escapes(code, True)
         code_sect.code = code
         for subsect in code_sect.get_next_section():
             if not self.__dir_proc.process_directives(subsect):
@@ -95,13 +95,35 @@ class Directive():
         return processed
 
 
+class Macro():
+    def __init__(self, identifier: str = "", args: list[str] = [], body: str = "") -> None:
+        self.identifier: str = identifier
+        self.args: list[str] = args
+        self.body: str = body
+
+    def expand_args(self, *args: str) -> str:
+        exp_code = self.body
+        for (arg_idx, arg_name) in enumerate(self.args):
+            # If argument value is specified, then use it. Otherwise use empty string.
+            arg_val = args[arg_idx] if arg_idx < len(args) else ""
+            # Replace all macro arguments in macro body with argument values.
+            exp_code = re.sub(rf"([^\w]){arg_name}([^\w])", rf"\g<1>{arg_val}\g<2>", exp_code, 0, re.ASCII + re.MULTILINE)
+        # Remove all string concatenations "##" .
+        exp_code = re.sub(r"([\s\\]*##[\s\\]*)", "", exp_code, 0, re.ASCII + re.MULTILINE)
+        return exp_code
+
+
 class DirectiveProcessor():
     def __init__(self, parent_cpp: CPreprocessor) -> None:
         self.cpp: CPreprocessor = parent_cpp
         self.cond_mngr: ConditionManager = ConditionManager()
-        self.directives_conditional: list[Directive] = [
-            Directive(re.compile(r"[ \t]*#\s*if", re.ASCII + re.DOTALL), self.process_if)
-        ]
+        self.eval: Evaluator = Evaluator()
+        self.directives: tuple[Directive] = (
+            Directive(re.compile(r"^[ \t]*#\s*define", re.ASCII + re.DOTALL), self.process_define)
+        )
+        self.directives_conditional: tuple[Directive] = (
+            Directive(re.compile(r"^[ \t]*#\s*if", re.ASCII + re.DOTALL), self.process_if)
+        )
 
     def process_directives(self, code_section: CodeSection) -> bool:
         processed = False
@@ -122,14 +144,18 @@ class DirectiveProcessor():
             # TODO: Add evaluation of defined(bla) macros.
         return processed
 
-    def process_if(self, code_section: CodeSection) -> None:
-        code = self.get_conditional_code(code_section)
-        # TODO: Evaluate defined(...) to true / false.
-        # TODO: Evaluate expression and test if value is true / false.
-        is_true = False
+    def process_define(self, expr_section: CodeSection) -> None:
+        ident_args_code = CodeFormatter.remove_comments(expr_section.code)
+        ident_args_code = CodeFormatter.remove_line_escapes(ident_args_code)
+        # TODO: Extract macro identifier, arguments and body.
+
+    def process_if(self, expr_section: CodeSection) -> None:
+        expr = self.preprocess_conditional_expr(expr_section)
+        # TODO: Evaluate defined(...) to 1 / 0.
+        is_true = self.eval.is_true(expr)
         self.cond_mngr.enter_if(is_true)
 
-    def get_conditional_code(self, code_section: CodeSection) -> str:
+    def preprocess_conditional_expr(self, expr_section: CodeSection) -> str:
         pass
         # if, elif, ifdef, ifndef
         # TODO: Remove comments.
