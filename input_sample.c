@@ -11,6 +11,22 @@
 #else 2
 #endif
 
+/* Macro constant representing the value of pi using a 32 bit floating point data type. */
+#define f32PI   3.1415926f
+
+/**
+ * Function-like macro to set one bit in an array to value 1.
+ * 
+ * Args:
+ *     BitSize: Array data type bit length. Only exact values ``8``, ``16``, ``32`` or ``64`` are allowed.
+ *     Array: ``UNSIGNED8/16/32/64`` array in which the bit should be set.
+ *     BitIdx: Index of a bit to set (0 = LSB).
+ */
+#define bit_op_ARR_SET_BIT(BitSize, Array, BitIdx) \
+    (Array[(BitIdx) / (BitSize)] |= \
+    ((UNSIGNED ## BitSize)1u << \
+    ((UNSIGNED ## BitSize)(BitIdx) % (UNSIGNED ## BitSize)(BitSize))))
+
 
 /* another comment
 #define NONEXISTENT_MACRO_B 10
