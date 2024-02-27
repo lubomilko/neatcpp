@@ -11,8 +11,11 @@
 #else 2
 #endif
 
+
 /* Macro constant representing the value of pi using a 32 bit floating point data type. */
 #define f32PI   3.1415926f
+
+
 
 /**
  * Function-like macro to set one bit in an array to value 1.
@@ -26,6 +29,14 @@
     (Array[(BitIdx) / (BitSize)] |= \
     ((UNSIGNED ## BitSize)1u << \
     ((UNSIGNED ## BitSize)(BitIdx) % (UNSIGNED ## BitSize)(BitSize))))
+
+
+#define xstr(s) str(s)
+     #define str(s) # s
+     #define foo 4
+
+     str (foo)
+     xstr (foo)
 
 
 /* another comment
