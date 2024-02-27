@@ -82,6 +82,34 @@ class CodeFormatter():
             out_code = CodeFormatter.RE_PTRN_SLINE_CMNT.sub(__repl_with_newlines, out_code)
         return out_code
 
+    @staticmethod
+    def is_in_comment(code: str, pos: int) -> bool:
+        in_comment = False
+        if 0 <= pos < len(code):
+            cmnt_pos = code.rfind("/*", 0, pos)
+            if cmnt_pos >= 0:
+                cmnt_pos = code.find("*/", cmnt_pos, pos)
+                if cmnt_pos < 0:
+                    in_comment = True
+            if not in_comment:
+                cmnt_pos = code.rfind("//", 0, pos)
+                if cmnt_pos >= 0:
+                    newline_pos = code.find("\n", cmnt_pos, pos)
+                    if newline_pos < 0:
+                        in_comment = True
+        return in_comment
+
+    @staticmethod
+    def is_in_string(code: str, pos: int) -> bool:
+        in_string = False
+        if 0 <= pos < len(code):
+            newline_pos = code.rfind("\n", 0, pos) + 1
+            dbl_quote_count = code[newline_pos: pos].count("\"")
+            sgl_quote_count = code[newline_pos: pos].count("\'")
+            if dbl_quote_count & 1 or sgl_quote_count & 1:
+                in_string = True
+        return in_string
+
 
 class CodeSection():
     def __init__(self) -> None:
