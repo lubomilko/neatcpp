@@ -71,13 +71,16 @@ class CPreprocessor():
         for subsect in code_sect.get_next_section():
             if not self.__dir_proc.process_directives(subsect):
                 if self.__dir_proc.cond_mngr.branch_active:
-                    # TODO: Expand macros.
+                    self.expand_macros(subsect.code)
                     if len(subsect.lines) > 1:
                         print(f"{subsect.code}\n\n")
                     self.output.append_section(subsect)
 
         if self.__dir_proc.cond_mngr.branch_depth != original_branch_depth:
             log.err("Unexpected #if detected.")
+
+    def expand_macros(self, code: str) -> str:
+        return self.__dir_proc.expand_macros(code)
 
 
 class Directive():
@@ -106,9 +109,11 @@ class Macro():
         for (arg_idx, arg_name) in enumerate(self.args):
             # If argument value is specified, then use it. Otherwise use empty string.
             arg_val = args[arg_idx] if arg_idx < len(args) else ""
+            # Perform stringifications specified by the # operator.
+            exp_code = re.sub(rf"(\s+)#\s*{arg_name}([^\w])", rf"\g<1>\"{arg_val}\"\g<2>", exp_code, 0, re.ASCII + re.MULTILINE)
             # Replace all macro arguments in macro body with argument values.
             exp_code = re.sub(rf"([^\w]){arg_name}([^\w])", rf"\g<1>{arg_val}\g<2>", exp_code, 0, re.ASCII + re.MULTILINE)
-        # Remove all string concatenations "##" .
+        # Perform concatenatenations specified by the ## operator by removing the operator and its surrounding spaces.
         exp_code = re.sub(r"([\s\\]*##[\s\\]*)", "", exp_code, 0, re.ASCII + re.MULTILINE)
         return exp_code
 
@@ -118,11 +123,12 @@ class DirectiveProcessor():
         self.cpp: CPreprocessor = parent_cpp
         self.cond_mngr: ConditionManager = ConditionManager()
         self.eval: Evaluator = Evaluator()
+        self.macros: dict[Macro] = {}
         self.directives: tuple[Directive] = (
-            Directive(re.compile(r"^[ \t]*#\s*define", re.ASCII + re.DOTALL), self.process_define)
+            Directive(re.compile(r"^[ \t]*#\s*define", re.ASCII + re.MULTILINE), self.process_define)
         )
         self.directives_conditional: tuple[Directive] = (
-            Directive(re.compile(r"^[ \t]*#\s*if", re.ASCII + re.DOTALL), self.process_if)
+            Directive(re.compile(r"^[ \t]*#\s*if", re.ASCII + re.MULTILINE), self.process_if)
         )
 
     def process_directives(self, code_section: CodeSection) -> bool:
@@ -135,29 +141,50 @@ class DirectiveProcessor():
                     processed = directive.process(code_section)
                     if processed:
                         break
-            elif self.cond_mngr.branch_active:
-                # if "#define" in code_section.lines[0]:
-                #    print(f"Define detected:\n{code_section.code}\n\n")
-                # print(f"Directive detected:\n{code_section.code}\n\n")
-                # TODO: parse non-conditional directives
-                pass
-            # TODO: Add evaluation of defined(bla) macros.
+                if self.cond_mngr.branch_active and not processed:
+                    # Process non-conditional directives in the active conditional branch.
+                    for directive in self.directives:
+                        processed = directive.process(code_section)
+                        if processed:
+                            break
         return processed
 
+    def expand_macros(self, code: str, exp_depth: int = 0) -> None:
+        if exp_depth == 0:
+            code = CodeFormatter.remove_line_escapes(code)
+        if exp_depth > 4096:
+            log.err("Macro expansion depth limit 4096 exceeded.")
+
+        for (macro_ident, macro) in self.macros.items():
+            macro_id_pos = code.find(macro_ident)
+            while macro_id_pos >= 0 and (not CodeFormatter.is_in_comment(code, macro_id_pos) and
+                                         not CodeFormatter.is_in_string(code, macro_id_pos)):
+                if macro.args:
+                    
+                else:
+
+                macro_id_pos = code.find(macro_ident)
+
     def process_define(self, expr_section: CodeSection) -> None:
-        ident_args_code = CodeFormatter.remove_comments(expr_section.code)
-        ident_args_code = CodeFormatter.remove_line_escapes(ident_args_code)
-        # TODO: Extract macro identifier, arguments and body.
+        macro_code = CodeFormatter.remove_line_escapes(expr_section.code, True)
+        re_match = re.match(r"\s*(?P<ident>\w+)(?P<args>\([^\)]*\))?", macro_code, re.ASCII + re.MULTILINE)
+        if re_match is not None:
+            ident = re_match.group("ident")
+            args = [arg.strip() for arg in re_match.group("args").split(",")]
+            body = macro_code[re_match.end():].lstrip()
+            self.macros[ident] = Macro(ident, args, body)
+        else:
+            log.err(f"#define with an unexpected formatting detected:\n{expr_section.lines[0]}...")
 
     def process_if(self, expr_section: CodeSection) -> None:
         expr = self.preprocess_conditional_expr(expr_section)
-        # TODO: Evaluate defined(...) to 1 / 0.
         is_true = self.eval.is_true(expr)
         self.cond_mngr.enter_if(is_true)
 
     def preprocess_conditional_expr(self, expr_section: CodeSection) -> str:
         pass
         # if, elif, ifdef, ifndef
-        # TODO: Remove comments.
         # TODO: Expand macros (remove comments after each expansion because macro bodies can contain comments).
+            # TODO: Evaluate defined(...) to 1 / 0.
+        # TODO: Remove comments.
         # TODO: Join escaped lines.
