@@ -63,7 +63,7 @@ class CodeFormatter():
                     out_code = f"{out_code}{line} "
             else:
                 out_code = f"{out_code}{line}\n"
-        return out_code
+        return out_code[:-1]
 
     @staticmethod
     def remove_comments(code: str, replace_with_spaces: bool = False, replace_with_newlines: bool = False) -> str:
