@@ -70,7 +70,7 @@ class CPreprocessor():
         # code = CodeFormatter.remove_line_escapes(code, True)
         code_sect.code = code
         for subsect in code_sect.get_next_section():
-            if not self.__dir_proc.process_directives(subsect):
+            if not self.__dir_proc.process_directives(subsect.code):
                 if self.__dir_proc.cond_mngr.branch_active:
                     self.out_code = f"{self.out_code}{self.expand_macros(subsect.code)}\n"
 
@@ -82,16 +82,17 @@ class CPreprocessor():
 
 
 class Directive():
-    def __init__(self, re_ptrn: re.Pattern = None, handler: Callable[[CodeSection], None] = None) -> None:
+    def __init__(self, re_ptrn: re.Pattern = None, handler: Callable[[str], None] = None) -> None:
         self.re_ptrn: re.Pattern = re_ptrn
-        self.handler: Callable[[CodeSection], None] = handler
+        self.handler: Callable[[str], None] = handler
 
-    def process(self, code_section: CodeSection) -> bool:
+    def process(self, code: str) -> bool:
         processed = False
-        re_match = self.re_ptrn.match(code_section.lines[0])
+        code_lines = code.splitlines()
+        re_match = self.re_ptrn.match(code_lines[0])
         if re_match:
-            code_section.lines[0] = code_section.lines[0][re_match.end():].lstrip()
-            self.handler(code_section)
+            code_lines[0] = code_lines[0][re_match.end():].lstrip()
+            self.handler("\n".join(code_lines))
             processed = True
         return processed
 
@@ -129,20 +130,20 @@ class DirectiveProcessor():
             Directive(re.compile(r"^[ \t]*#\s*if", re.ASCII + re.MULTILINE), self.process_if),
         )
 
-    def process_directives(self, code_section: CodeSection) -> bool:
+    def process_directives(self, code: str) -> bool:
         processed = False
-        if code_section.lines[0].lstrip().startswith("#"):
+        if code and code.splitlines()[0].lstrip().startswith("#"):
             if self.cond_mngr.branch_search_active:
                 # Process only conditional directives to correctly update the brach state stack and
                 # detect elif/else for SEARCH branch state.
                 for directive in self.directives_conditional:
-                    processed = directive.process(code_section)
+                    processed = directive.process(code)
                     if processed:
                         break
                 if self.cond_mngr.branch_active and not processed:
                     # Process non-conditional directives in the active conditional branch.
                     for directive in self.directives:
-                        processed = directive.process(code_section)
+                        processed = directive.process(code)
                         if processed:
                             break
         return processed
@@ -177,8 +178,8 @@ class DirectiveProcessor():
                 macro_id_pos = exp_code.find(macro_ident)
         return exp_code
 
-    def process_define(self, expr_section: CodeSection) -> None:
-        macro_code = CodeFormatter.remove_line_escapes(expr_section.code, True)
+    def process_define(self, expr_code: str) -> None:
+        macro_code = CodeFormatter.remove_line_escapes(expr_code, True)
         re_match = re.match(r"\s*(?P<ident>\w+)(?:\((?P<args>[^\)]*)\))?", macro_code, re.ASCII + re.MULTILINE)
         if re_match is not None:
             ident = re_match.group("ident")
@@ -186,14 +187,14 @@ class DirectiveProcessor():
             body = macro_code[re_match.end():].strip()
             self.macros[ident] = Macro(ident, args, body)
         else:
-            log.err(f"#define with an unexpected formatting detected:\n{expr_section.lines[0]}...")
+            log.err(f"#define with an unexpected formatting detected:\n{expr_code}")
 
-    def process_if(self, expr_section: CodeSection) -> None:
-        expr = self.__preprocess_conditional_expr(expr_section)
+    def process_if(self, expr_code: str) -> None:
+        expr = self.__preprocess_conditional_expr(expr_code)
         is_true = self.eval.is_true(expr)
         self.cond_mngr.enter_if(is_true)
 
-    def __preprocess_conditional_expr(self, expr_section: CodeSection) -> str:
+    def __preprocess_conditional_expr(self, expr_code: str) -> str:
         pass
         # if, elif, ifdef, ifndef
         # TODO: Expand macros (remove comments after each expansion because macro bodies can contain comments).
