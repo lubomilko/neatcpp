@@ -106,9 +106,20 @@ class Macro():
     def expand_args(self, arg_vals: list[str] = [], fully_exp_arg_vals: list[str] = []) -> str:
         exp_code = self.body
         for (arg_idx, arg_name) in enumerate(self.args):
-            # If argument value is specified, then use it. Otherwise use empty string (not enough parameters given in macro reference).
-            arg_val = arg_vals[arg_idx] if arg_idx < len(arg_vals) else ""
-            fully_exp_arg_val = fully_exp_arg_vals[arg_idx] if arg_idx < len(fully_exp_arg_vals) else ""
+            # Handle variadic arguments.
+            if arg_name == "...":
+                arg_name = "__VA_ARGS__"
+                arg_val = ""
+                fully_exp_arg_val = ""
+                for arg_val_idx in range(arg_idx, len(arg_vals)):
+                    arg_val = f"{arg_val}{arg_vals[arg_val_idx]}, "
+                    fully_exp_arg_val = f"{fully_exp_arg_val}{fully_exp_arg_vals[arg_val_idx]}, "
+                arg_val = arg_val[:-2]
+                fully_exp_arg_val = fully_exp_arg_val[:-2]
+            else:
+                # If argument value is specified, then use it. Otherwise use empty string (not enough parameters given in macro reference).
+                arg_val = arg_vals[arg_idx] if arg_idx < len(arg_vals) else ""
+                fully_exp_arg_val = fully_exp_arg_vals[arg_idx] if arg_idx < len(fully_exp_arg_vals) else ""
             # Perform concatenatenation of macro arguments specified by the ## operator.
             exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
             exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
@@ -173,7 +184,7 @@ class DirectiveProcessor():
                     if args_re_match is not None:
                         macro_end_pos += len(args_re_match.group())
                         arg_vals = self.__extract_macro_ref_args(args_re_match.group("args"))
-                    if len(arg_vals) != len(macro.args):
+                    if len(arg_vals) < len(macro.args):
                         log.err(f"Reference of macro {macro_id} expects {len(macro.args)} arguments, but not all were detected.")
                     # Create a list of fully expanded macro arguments.
                     fully_exp_arg_vals = []
@@ -225,6 +236,6 @@ class DirectiveProcessor():
                         (args[arg_idx].count("(") != args[arg_idx].count(")"))):
                     args[arg_idx] += temp_arg
                 else:
-                    args.append(temp_arg)
+                    args.append(temp_arg.strip())
                     arg_idx += 1
         return args
