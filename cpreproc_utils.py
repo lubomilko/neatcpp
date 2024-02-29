@@ -83,6 +83,19 @@ class CodeFormatter():
         return out_code
 
     @staticmethod
+    def get_enclosed_subst_pos(code: str, start_pos: int = 0, start_str: str = "(", end_str: str = ")",
+                               ignored_prefix_re_ptrn: re.Pattern = re.compile(r"\s*", re.ASCII)) -> tuple[int, int]:
+        s_pos = code.find(start_str, start_pos)
+        e_pos = -1
+        if s_pos >= 0 and ignored_prefix_re_ptrn.match(code, start_pos, s_pos) is not None:
+            e_pos = code.find(end_str, s_pos + 1)
+            while e_pos >= 0 and (code[s_pos: e_pos + 1].count(start_str) != code[s_pos: e_pos + 1].count(end_str)):
+                e_pos = code.find(end_str, e_pos + 1)
+            if e_pos < 0:
+                s_pos = -1
+        return (s_pos, e_pos)
+
+    @staticmethod
     def is_in_comment(code: str, pos: int) -> bool:
         in_comment = False
         if 0 <= pos < len(code):
