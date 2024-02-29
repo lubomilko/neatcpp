@@ -172,7 +172,8 @@ class DirectiveProcessor():
             return exp_code
 
         for (macro_id, macro) in self.macros.items():
-            re_match_macro_id = re.search(rf"(^|[^\w])(?P<id>{macro_id})($|[^\w])", exp_code, re.ASCII + re.MULTILINE)
+            macro_re_ptrn_end = r"\s*\(" if macro.args else r"(?:$|[^\w])"
+            re_match_macro_id = re.search(rf"(?:^|[^\w])(?P<id>{macro_id}){macro_re_ptrn_end}", exp_code, re.ASCII + re.MULTILINE)
             macro_id_pos = -1
             if re_match_macro_id is not None:
                 macro_id_pos = re_match_macro_id.start("id")
@@ -186,7 +187,7 @@ class DirectiveProcessor():
                         macro_end_pos = args_end_pos + 1
                         arg_vals = self.__extract_macro_ref_args(exp_code[args_start_pos + 1:args_end_pos])
                     if len(arg_vals) < len(macro.args):
-                        log.err(f"Reference of macro {macro_id} expects {len(macro.args)} arguments, but not all were detected.")
+                        log.err(f"{macro_id} macro reference is missing some of its {len(macro.args)} arguments.")
                     # Create a list of fully expanded macro arguments.
                     fully_exp_arg_vals = []
                     for arg_val in arg_vals:
