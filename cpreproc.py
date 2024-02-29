@@ -103,17 +103,21 @@ class Macro():
         self.args: list[str] = args
         self.body: str = body
 
-    def expand_args(self, *args: str) -> str:
+    def expand_args(self, arg_vals: list[str] = [], fully_exp_arg_vals: list[str] = []) -> str:
         exp_code = self.body
         for (arg_idx, arg_name) in enumerate(self.args):
-            # If argument value is specified, then use it. Otherwise use empty string.
-            arg_val = args[arg_idx] if arg_idx < len(args) else ""
-            # Perform stringifications specified by the # operator.
-            exp_code = re.sub(rf"#\s*{arg_name}($|[^\w])", rf'"{arg_val}"\g<1>', exp_code, 0, re.ASCII + re.MULTILINE)
-            # Replace all macro arguments in macro body with argument values.
-            exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{arg_val}\g<2>", exp_code, 0, re.ASCII + re.MULTILINE)
-        # Perform concatenatenations specified by the ## operator by removing the operator and its surrounding spaces.
-        exp_code = re.sub(r"([\s\\]*##[\s\\]*)", "", exp_code, 0, re.ASCII + re.MULTILINE)
+            # If argument value is specified, then use it. Otherwise use empty string (not enough parameters given in macro reference).
+            arg_val = arg_vals[arg_idx] if arg_idx < len(arg_vals) else ""
+            fully_exp_arg_val = fully_exp_arg_vals[arg_idx] if arg_idx < len(fully_exp_arg_vals) else ""
+            # Perform concatenatenation of macro arguments specified by the ## operator.
+            exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
+            exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
+            # Perform stringification specified by the # operator.
+            exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", rf'\g<1>"{arg_val}"\g<2>', exp_code, 0, re.ASCII + re.MULTILINE)
+            # Replace the macro argument in macro body with the fully expanded argument value.
+            exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{fully_exp_arg_val}\g<2>", exp_code, 0, re.ASCII + re.MULTILINE)
+        # Perform remaining concatenatenations specified by the ## operator by removing the operator and its surrounding spaces.
+        exp_code = re.sub(r"[\s\\]*##[\s\\]*", "", exp_code, 0, re.ASCII + re.MULTILINE)
         return exp_code
 
 
@@ -155,11 +159,14 @@ class DirectiveProcessor():
         if exp_depth > 4096:
             log.err("Macro expansion depth limit 4096 exceeded.")
 
-        for (macro_ident, macro) in self.macros.items():
-            macro_id_pos = exp_code.find(macro_ident)
+        for (macro_id, macro) in self.macros.items():
+            re_match_macro_id = re.search(rf"(^|[^\w])(?P<id>{macro_id})($|[^\w])", exp_code, re.ASCII + re.MULTILINE)
+            macro_id_pos = -1
+            if re_match_macro_id is not None:
+                macro_id_pos = re_match_macro_id.start("id")
             while macro_id_pos >= 0 and (not CodeFormatter.is_in_comment(exp_code, macro_id_pos) and
                                          not CodeFormatter.is_in_string(exp_code, macro_id_pos)):
-                macro_end_pos = macro_id_pos + len(macro_ident)
+                macro_end_pos = macro_id_pos + len(macro_id)
                 if macro.args:
                     arg_vals = []
                     args_re_match = re.match(r"\s*\((?P<args>.*)\)", exp_code[macro_end_pos:], re.ASCII)
@@ -167,15 +174,19 @@ class DirectiveProcessor():
                         macro_end_pos += len(args_re_match.group())
                         arg_vals = self.__extract_macro_ref_args(args_re_match.group("args"))
                     if len(arg_vals) != len(macro.args):
-                        log.err(f"Reference of macro {macro_ident} expects {len(macro.args)} arguments, but not all were detected.")
-                    exp_macro_code = macro.expand_args(*arg_vals)
+                        log.err(f"Reference of macro {macro_id} expects {len(macro.args)} arguments, but not all were detected.")
+                    # Create a list of fully expanded macro arguments.
+                    fully_exp_arg_vals = []
+                    for arg_val in arg_vals:
+                        exp_arg_val = self.expand_macros(arg_val, exp_depth + 1)
+                        fully_exp_arg_vals.append(exp_arg_val)
+                    exp_macro_code = macro.expand_args(arg_vals, fully_exp_arg_vals)
                 else:
                     exp_macro_code = macro.expand_args()
-
+                # Recursively expand the expanded macro body.
                 exp_macro_code = self.expand_macros(exp_macro_code, exp_depth + 1)
                 exp_code = exp_code[:macro_id_pos] + exp_macro_code + exp_code[macro_end_pos:]
-
-                macro_id_pos = exp_code.find(macro_ident)
+                macro_id_pos = exp_code.find(macro_id)
         return exp_code
 
     def process_define(self, expr_code: str) -> None:
