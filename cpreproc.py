@@ -169,6 +169,7 @@ class DirectiveProcessor():
             exp_code = CodeFormatter.remove_line_escapes(exp_code)
         if exp_depth > 4096:
             log.err("Macro expansion depth limit 4096 exceeded.")
+            return exp_code
 
         for (macro_id, macro) in self.macros.items():
             re_match_macro_id = re.search(rf"(^|[^\w])(?P<id>{macro_id})($|[^\w])", exp_code, re.ASCII + re.MULTILINE)
@@ -180,10 +181,10 @@ class DirectiveProcessor():
                 macro_end_pos = macro_id_pos + len(macro_id)
                 if macro.args:
                     arg_vals = []
-                    args_re_match = re.match(r"\s*\((?P<args>.*)\)", exp_code[macro_end_pos:], re.ASCII)
-                    if args_re_match is not None:
-                        macro_end_pos += len(args_re_match.group())
-                        arg_vals = self.__extract_macro_ref_args(args_re_match.group("args"))
+                    (args_start_pos, args_end_pos) = CodeFormatter.get_enclosed_subst_pos(exp_code, macro_end_pos)
+                    if args_start_pos >= 0:
+                        macro_end_pos = args_end_pos + 1
+                        arg_vals = self.__extract_macro_ref_args(exp_code[args_start_pos + 1:args_end_pos])
                     if len(arg_vals) < len(macro.args):
                         log.err(f"Reference of macro {macro_id} expects {len(macro.args)} arguments, but not all were detected.")
                     # Create a list of fully expanded macro arguments.
