@@ -1,5 +1,6 @@
 import re
 from enum import IntEnum
+from textwrap import dedent
 from typing import Callable
 from cpreproc_utils import FileIO, CodeFormatter, CodeSection, Evaluator
 from logger import log
@@ -114,7 +115,7 @@ class Macro():
                 for arg_val_idx in range(arg_idx, len(arg_vals)):
                     arg_val = f"{arg_val}{arg_vals[arg_val_idx]}, "
                     fully_exp_arg_val = f"{fully_exp_arg_val}{fully_exp_arg_vals[arg_val_idx]}, "
-                arg_val = arg_val[:-2]
+                arg_val = arg_val[:-2]  # Remove the last two characters, i.e. ", " that is used for argument separation.
                 fully_exp_arg_val = fully_exp_arg_val[:-2]
             else:
                 # If argument value is specified, then use it. Otherwise use empty string (not enough parameters given in macro reference).
@@ -172,14 +173,10 @@ class DirectiveProcessor():
             return exp_code
 
         for (macro_id, macro) in self.macros.items():
-            macro_re_ptrn_end = r"\s*\(" if macro.args else r"(?:$|[^\w])"
-            re_match_macro_id = re.search(rf"(?:^|[^\w])(?P<id>{macro_id}){macro_re_ptrn_end}", exp_code, re.ASCII + re.MULTILINE)
-            macro_id_pos = -1
-            if re_match_macro_id is not None:
-                macro_id_pos = re_match_macro_id.start("id")
-            while macro_id_pos >= 0 and (not CodeFormatter.is_in_comment(exp_code, macro_id_pos) and
-                                         not CodeFormatter.is_in_string(exp_code, macro_id_pos)):
-                macro_end_pos = macro_id_pos + len(macro_id)
+            macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, macro.args)
+            while macro_start_pos >= 0 and (not CodeFormatter.is_in_comment(exp_code, macro_start_pos) and
+                                            not CodeFormatter.is_in_string(exp_code, macro_start_pos)):
+                macro_end_pos = macro_start_pos + len(macro_id)
                 if macro.args:
                     arg_vals = []
                     (args_start_pos, args_end_pos) = CodeFormatter.get_enclosed_subst_pos(exp_code, macro_end_pos)
@@ -198,8 +195,8 @@ class DirectiveProcessor():
                     exp_macro_code = macro.expand_args()
                 # Recursively expand the expanded macro body.
                 exp_macro_code = self.expand_macros(exp_macro_code, exp_depth + 1)
-                exp_code = exp_code[:macro_id_pos] + exp_macro_code + exp_code[macro_end_pos:]
-                macro_id_pos = exp_code.find(macro_id)
+                exp_code = exp_code[:macro_start_pos] + exp_macro_code + exp_code[macro_end_pos:]
+                macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, macro.args)
         return exp_code
 
     def process_define(self, expr_code: str) -> None:
@@ -208,7 +205,12 @@ class DirectiveProcessor():
         if re_match is not None:
             ident = re_match.group("ident")
             args = [arg.strip() for arg in re_match.group("args").split(",")] if re_match.group("args") else []
-            body = macro_code[re_match.end():].strip()
+            body = macro_code[re_match.end():].rstrip()
+            if body.startswith("\n"):
+                body = body[1:]
+                body = dedent(body)
+            else:
+                body = body.lstrip()
             self.macros[ident] = Macro(ident, args, body)
         else:
             log.err(f"#define with an unexpected formatting detected:\n{expr_code}")
@@ -225,6 +227,14 @@ class DirectiveProcessor():
         # TODO: Evaluate defined(...) to 1 / 0.
         # TODO: Remove comments.
         # TODO: Join escaped lines.
+
+    def __get_macro_ident_pos(self, code: str, macro_ident: str, has_args: bool = False) -> int:
+        macro_id_pos = -1
+        macro_re_ptrn_end = r"\s*\(" if has_args else r"(?:$|[^\w])"
+        re_match_macro_id = re.search(rf"(?:^|[^\w])(?P<id>{macro_ident}){macro_re_ptrn_end}", code, re.ASCII + re.MULTILINE)
+        if re_match_macro_id is not None:
+            macro_id_pos = re_match_macro_id.start("id")
+        return macro_id_pos
 
     def __extract_macro_ref_args(self, args_code: str) -> list[str]:
         args = []
