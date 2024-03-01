@@ -182,7 +182,7 @@ class DirectiveProcessor():
                     (args_start_pos, args_end_pos) = CodeFormatter.get_enclosed_subst_pos(exp_code, macro_end_pos)
                     if args_start_pos >= 0:
                         macro_end_pos = args_end_pos + 1
-                        arg_vals = self.__extract_macro_ref_args(exp_code[args_start_pos + 1:args_end_pos])
+                        arg_vals = self.__extract_macro_ref_args(exp_code[args_start_pos + 1: args_end_pos])
                     if len(arg_vals) < len(macro.args):
                         log.err(f"{macro_id} macro reference is missing some of its {len(macro.args)} arguments.")
                     # Create a list of fully expanded macro arguments.
@@ -195,9 +195,20 @@ class DirectiveProcessor():
                     exp_macro_code = macro.expand_args()
                 # Recursively expand the expanded macro body.
                 exp_macro_code = self.expand_macros(exp_macro_code, exp_depth + 1)
-                exp_code = exp_code[:macro_start_pos] + exp_macro_code + exp_code[macro_end_pos:]
+                exp_code = self.__insert_expanded_macro(exp_code, macro_start_pos, macro_end_pos, exp_macro_code)
                 macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, macro.args)
         return exp_code
+
+    def __insert_expanded_macro(self, code: str, macro_ref_start_pos: int, macro_ref_end_pos: int, exp_macro_code: str) -> str:
+        out_code = code[:macro_ref_start_pos]
+        if "\n" in exp_macro_code:
+            # Indent macro body lines 1 and more using the indentation of the code line where the macro line 0 is located.
+            macro_insert_line = out_code.splitlines()[-1] if "\n" in out_code else out_code
+            strip_insert_line = macro_insert_line.lstrip()
+            indent_symbols = macro_insert_line[: -len(strip_insert_line)] if strip_insert_line else macro_insert_line
+            exp_macro_code = exp_macro_code.replace("\n", f"\n{indent_symbols}")
+        out_code = f"{out_code}{exp_macro_code}{code[macro_ref_end_pos:]}"
+        return out_code
 
     def process_define(self, expr_code: str) -> None:
         macro_code = CodeFormatter.remove_line_escapes(expr_code, True)
