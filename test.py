@@ -12,6 +12,10 @@ def main() -> None:
     with open("src2_out.c", "w", encoding="utf-8") as file:
         file.write(cpp.out_code)
 
+    cpp = CPreprocessor()
+    cpp.process_file("src3.c")
+    with open("src3_out.c", "w", encoding="utf-8") as file:
+        file.write(cpp.out_code)
 
 if __name__ == "__main__":
     main()

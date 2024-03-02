@@ -27,7 +27,8 @@ VAR_MACRO(1, 2, 3, foo, 5)
 
 #define MULTILINE_FUNC_MACRO(a,b) \
      (a) = 5 + 4;\
+     \
      (b) = 4 + 3;
 
   MULTILINE_SIMPLE_MACRO
-MULTILINE_FUNC_MACRO(A, B)
+    MULTILINE_FUNC_MACRO(A, B)
