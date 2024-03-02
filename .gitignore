@@ -1,2 +1,3 @@
 __pycache__/
-*_out.c
+*_out.*
+*_exp.*
