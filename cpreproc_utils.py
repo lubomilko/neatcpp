@@ -1,6 +1,5 @@
 import re
 from pathlib import Path
-from typing import Generator
 from logger import log
 
 
@@ -122,55 +121,6 @@ class CodeFormatter():
             if dbl_quote_count & 1 or sgl_quote_count & 1:
                 in_string = True
         return in_string
-
-
-class CodeSection():
-    def __init__(self) -> None:
-        self.lines: list[str] = []
-        self.line_idx: int = 0
-        self.has_escaped_lines: bool = False
-        self.has_multiline_comment: bool = False
-
-    @property
-    def code(self) -> str:
-        return "\n".join(self.lines)
-
-    @code.setter
-    def code(self, code: str) -> None:
-        self.lines = code.splitlines()
-        self.line_idx = 0
-
-    def get_next_section(self) -> Generator["CodeSection", None, None]:
-        code_lines_num = len(self.lines)
-        while self.line_idx < code_lines_num:
-            out = CodeSection()
-            line = self.lines[self.line_idx].rstrip()
-            out.lines.append(line)
-            self.line_idx += 1
-            # Detect and extract continuous line split to lines ending with "\".
-            if line.endswith("\\"):
-                while self.line_idx < code_lines_num:
-                    line = self.lines[self.line_idx].rstrip()
-                    out.lines.append(line)
-                    self.line_idx += 1
-                    if not line.endswith("\\"):
-                        break
-                out.has_escaped_lines = True
-            # Detect and extract multiline comment.
-            if "/*" in line and "*/" not in line:
-                while self.line_idx < code_lines_num:
-                    line = self.lines[self.line_idx].rstrip()
-                    out.lines.append(line)
-                    self.line_idx += 1
-                    if "*/" in line:
-                        break
-                else:
-                    log.err("Unterminated comment detected.")
-                out.has_multiline_comment = True
-            yield out
-
-    def append_section(self, new_section: "CodeSection") -> None:
-        self.lines.extend(new_section.lines)
 
 
 class Evaluator():

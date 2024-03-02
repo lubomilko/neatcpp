@@ -1,9 +1,13 @@
 import re
 from enum import IntEnum
+from typing import Generator
 from textwrap import dedent
 from typing import Callable
-from cpreproc_utils import FileIO, CodeFormatter, CodeSection, Evaluator
+from cpreproc_utils import FileIO, CodeFormatter, Evaluator
 from logger import log
+
+
+__all__ = ["CPreprocessor"]
 
 
 class ConditionManager():
@@ -50,36 +54,120 @@ class ConditionManager():
             log.err("Unexpected #endif detected.")
 
 
+class CodeType(IntEnum):
+    CODE = 0
+    DIRECTIVE = 1
+    COMMENT = 2
+    SPACE = 3
+
+
+class PreprocInput():
+    def get_next_code_part(self, code: str) -> Generator[tuple[CodeType, str], None, None]:
+        in_lines = code.splitlines()
+        line_idx = 0
+        code_lines_num = len(in_lines)
+        while line_idx < code_lines_num:
+            out_lines = []
+            in_line = in_lines[line_idx].rstrip()
+            out_lines.append(in_line)
+            line_idx += 1
+            # Detect and extract continuous line split to lines ending with "\".
+            if in_line.endswith("\\"):
+                while line_idx < code_lines_num:
+                    in_line = in_lines[line_idx].rstrip()
+                    out_lines.append(in_line)
+                    line_idx += 1
+                    if not in_line.endswith("\\"):
+                        break
+            # Detect and extract multiline comment.
+            elif "/*" in in_line and "*/" not in in_line:
+                while line_idx < code_lines_num:
+                    in_line = in_lines[line_idx].rstrip()
+                    out_lines.append(in_line)
+                    line_idx += 1
+                    if "*/" in in_line:
+                        break
+                else:
+                    log.err("Unterminated comment detected.")
+            # Detect and extract multiple empty lines.
+            elif not in_line:
+                while line_idx < code_lines_num and not in_lines[line_idx].strip():
+                    out_lines.append("\n")
+                    line_idx += 1
+
+            out_code = "\n".join(out_lines)
+            out_code_stripped = out_code.strip()
+            if out_code_stripped.startswith("#"):
+                out_type = CodeType.DIRECTIVE
+            elif not out_code_stripped:
+                out_type = CodeType.SPACE
+            elif ((out_code_stripped.startswith("/*") and out_code_stripped.endswith("*/")) or
+                    out_code_stripped.startswith("//")):
+                out_type = CodeType.COMMENT
+            else:
+                out_type = CodeType.CODE
+            yield (out_type, out_code)
+
+
+class PreprocOutput():
+    def __init__(self) -> None:
+        self.last_space: str = ""
+        self.last_comment: str = ""
+        self.code_non_empty: bool = False
+        self.code: str = ""
+
+    def add_code(self, code: str, code_type: CodeType) -> None:
+        match code_type:
+            case CodeType.SPACE:
+                if self.code_non_empty:
+                    self.last_space = f"{code}\n"
+                self.last_comment = ""
+            case CodeType.COMMENT:
+                self.last_comment = f"{self.last_comment}{code}\n"
+            case CodeType.DIRECTIVE:
+                self.last_space = ""
+                self.last_comment = ""
+            case CodeType.CODE:
+                self.code = f"{self.code}{self.last_space}{self.last_comment}{code}\n"
+                self.last_space = ""
+                self.last_comment = ""
+                self.code_non_empty = True
+
+
 class CPreprocessor():
     def __init__(self) -> None:
         self.__file_io: FileIO = FileIO()
         self.__dir_proc: DirectiveProcessor = DirectiveProcessor(self)
-        self.out_code: str = ""
+        self.__output: PreprocOutput = PreprocOutput()
+
+    @property
+    def output(self) -> str:
+        return self.__output.code
 
     def add_include_dirs(self, *dir_paths: str) -> None:
         self.__file_io.add_include_dir(dir_paths)
 
-    def process_file(self, file_path: str) -> None:
+    def process_file(self, file_path: str, generate_output: bool = True) -> None:
         file_code = self.__file_io.read_include_file(file_path)
-        self.process_code(file_code)
+        self.process_code(file_code, generate_output)
 
-    def process_code(self, code: str) -> None:
+    def process_code(self, code: str, generate_output: bool = True) -> None:
         original_branch_depth = self.__dir_proc.cond_mngr.branch_depth
-        code_sect = CodeSection()
         code = CodeFormatter.replace_tabs(code)
         # code = CodeFormatter.remove_comments(code, replace_with_newlines=True)
         # code = CodeFormatter.remove_line_escapes(code, True)
-        code_sect.code = code
-        for subsect in code_sect.get_next_section():
-            if not self.__dir_proc.process_directives(subsect.code):
+        input = PreprocInput()
+        for (code_type, code_part) in input.get_next_code_part(code):
+            if code_type == CodeType.DIRECTIVE:
+                self.__dir_proc.process_directives(code_part)
+            else:
                 if self.__dir_proc.cond_mngr.branch_active:
-                    self.out_code = f"{self.out_code}{self.expand_macros(subsect.code)}\n"
-
+                    if code_type == CodeType.CODE:
+                        code_part = self.__dir_proc.expand_macros(code_part)
+            if generate_output:
+                self.__output.add_code(code_part, code_type)
         if self.__dir_proc.cond_mngr.branch_depth != original_branch_depth:
             log.err("Unexpected #if detected.")
-
-    def expand_macros(self, code: str) -> str:
-        return self.__dir_proc.expand_macros(code)
 
 
 class Directive():
@@ -149,20 +237,19 @@ class DirectiveProcessor():
 
     def process_directives(self, code: str) -> bool:
         processed = False
-        if code and code.splitlines()[0].lstrip().startswith("#"):
-            if self.cond_mngr.branch_search_active:
-                # Process only conditional directives to correctly update the brach state stack and
-                # detect elif/else for SEARCH branch state.
-                for directive in self.directives_conditional:
+        if self.cond_mngr.branch_search_active:
+            # Process only conditional directives to correctly update the brach state stack and
+            # detect elif/else for SEARCH branch state.
+            for directive in self.directives_conditional:
+                processed = directive.process(code)
+                if processed:
+                    break
+            if self.cond_mngr.branch_active and not processed:
+                # Process non-conditional directives in the active conditional branch.
+                for directive in self.directives:
                     processed = directive.process(code)
                     if processed:
                         break
-                if self.cond_mngr.branch_active and not processed:
-                    # Process non-conditional directives in the active conditional branch.
-                    for directive in self.directives:
-                        processed = directive.process(code)
-                        if processed:
-                            break
         return processed
 
     def expand_macros(self, code: str, exp_depth: int = 0) -> str:

@@ -5,17 +5,18 @@ def main() -> None:
     cpp = CPreprocessor()
     cpp.process_file("src1.c")
     with open("src1_out.c", "w", encoding="utf-8") as file:
-        file.write(cpp.out_code)
+        file.write(cpp.output)
 
     cpp = CPreprocessor()
     cpp.process_file("src2.c")
     with open("src2_out.c", "w", encoding="utf-8") as file:
-        file.write(cpp.out_code)
+        file.write(cpp.output)
 
     cpp = CPreprocessor()
     cpp.process_file("src3.c")
     with open("src3_out.c", "w", encoding="utf-8") as file:
-        file.write(cpp.out_code)
+        file.write(cpp.output)
+
 
 if __name__ == "__main__":
     main()
