@@ -130,7 +130,8 @@ class Macro():
             exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{fully_exp_arg_val}\g<2>", exp_code, 0, re.ASCII + re.MULTILINE)
         # Perform remaining concatenatenations specified by the ## operator by removing the operator and its surrounding spaces.
         exp_code = re.sub(r"[\s\\]*##[\s\\]*", "", exp_code, 0, re.ASCII + re.MULTILINE)
-        return exp_code
+        # Perform an lstrip in case some of the expanded arguments are empty and generate a whitespace at the beginning of the macro body.
+        return exp_code.lstrip()
 
 
 class DirectiveProcessor():
@@ -202,11 +203,14 @@ class DirectiveProcessor():
     def __insert_expanded_macro(self, code: str, macro_ref_start_pos: int, macro_ref_end_pos: int, exp_macro_code: str) -> str:
         out_code = code[:macro_ref_start_pos]
         if "\n" in exp_macro_code:
-            # Indent macro body lines 1 and more using the indentation of the code line where the macro line 0 is located.
+            # Indent macro body lines 1 and more using the indentation of the code line where the macro is referenced.
             macro_insert_line = out_code.splitlines()[-1] if "\n" in out_code else out_code
             strip_insert_line = macro_insert_line.lstrip()
+            # Get whitespace characters used for the indentation of the code line where the macro is referenced.
             indent_symbols = macro_insert_line[: -len(strip_insert_line)] if strip_insert_line else macro_insert_line
-            exp_macro_code = exp_macro_code.replace("\n", f"\n{indent_symbols}")
+            # Add whitespace indentation characters before each macro body line that isn't empty, starting from the second line.
+            exp_macro_code = "\n".join([f"{indent_symbols}{line}".rstrip() if idx > 0 else line
+                                        for (idx, line) in enumerate(exp_macro_code.splitlines())])
         out_code = f"{out_code}{exp_macro_code}{code[macro_ref_end_pos:]}"
         return out_code
 
