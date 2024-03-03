@@ -37,6 +37,7 @@ class FileIO():
 class CodeFormatter():
     RE_PTRN_MLINE_CMNT = re.compile(r"/\*.*?\*/", re.ASCII + re.DOTALL)
     RE_PTRN_SLINE_CMNT = re.compile(r"//[^\n]*", re.ASCII)
+    RE_PTRN_LINE_CONT = re.compile(r"[ \t]*\\[ \t]*\n", re.ASCII)
 
     @staticmethod
     def replace_tabs(code: str, tab_size: int = 4) -> str:
@@ -51,18 +52,14 @@ class CodeFormatter():
 
     @staticmethod
     def remove_line_escapes(code: str, keep_newlines: bool = False) -> str:
-        out_code = ""
-        for line in code.splitlines():
-            if line.rstrip().endswith("\\"):
-                line = line[: -1].rstrip()
-                if keep_newlines:
-                    out_code = f"{out_code}{line}\n"
-                else:
-                    line = line.lstrip()
-                    out_code = f"{out_code}{line} "
-            else:
-                out_code = f"{out_code}{line}\n"
-        return out_code[:-1]
+        repl_str = "\n" if keep_newlines else " "
+        out_code = CodeFormatter.RE_PTRN_LINE_CONT.sub(repl_str, code)
+        return out_code
+
+    @staticmethod
+    def remove_empty_lines(code: str) -> str:
+        out_lines = [line for line in code.splitlines() if line.strip()]
+        return "\n".join(out_lines)
 
     @staticmethod
     def remove_comments(code: str, replace_with_spaces: bool = False, replace_with_newlines: bool = False) -> str:
@@ -121,23 +118,3 @@ class CodeFormatter():
             if dbl_quote_count & 1 or sgl_quote_count & 1:
                 in_string = True
         return in_string
-
-
-class Evaluator():
-    @staticmethod
-    def evaluate(expression: str) -> any:
-        # Expression must already be preprocessed, i.e., lines joined, comments removed, macros expanded.
-        expression = expression.replace("&&", " and ").replace("||", " or ").replace("/", "//")
-        re.sub(r"!([^?==])", r" not \1", expression)
-        try:
-            # TODO: Make eval more safe by restricting certain commands or whole imports.
-            output = eval(expression)
-        except (SyntaxError, NameError, TypeError, ZeroDivisionError):
-            output = False
-        return output
-
-    def is_true(self, expression: str) -> bool:
-        state = self.evaluate(expression)
-        if type(state) is str:
-            return False
-        return bool(state)
