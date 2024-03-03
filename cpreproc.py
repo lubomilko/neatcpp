@@ -3,7 +3,7 @@ from enum import IntEnum
 from typing import Generator
 from textwrap import dedent
 from typing import Callable
-from cpreproc_utils import FileIO, CodeFormatter, Evaluator
+from cpreproc_utils import FileIO, CodeFormatter
 from logger import log
 
 
@@ -134,42 +134,6 @@ class PreprocOutput():
                 self.code_non_empty = True
 
 
-class CPreprocessor():
-    def __init__(self) -> None:
-        self.__file_io: FileIO = FileIO()
-        self.__dir_proc: DirectiveProcessor = DirectiveProcessor(self)
-        self.__output: PreprocOutput = PreprocOutput()
-
-    @property
-    def output(self) -> str:
-        return self.__output.code
-
-    def add_include_dirs(self, *dir_paths: str) -> None:
-        self.__file_io.add_include_dir(dir_paths)
-
-    def process_file(self, file_path: str, generate_output: bool = True) -> None:
-        file_code = self.__file_io.read_include_file(file_path)
-        self.process_code(file_code, generate_output)
-
-    def process_code(self, code: str, generate_output: bool = True) -> None:
-        original_branch_depth = self.__dir_proc.cond_mngr.branch_depth
-        code = CodeFormatter.replace_tabs(code)
-        # code = CodeFormatter.remove_comments(code, replace_with_newlines=True)
-        # code = CodeFormatter.remove_line_escapes(code, True)
-        input = PreprocInput()
-        for (code_type, code_part) in input.get_next_code_part(code):
-            if code_type == CodeType.DIRECTIVE:
-                self.__dir_proc.process_directives(code_part)
-            else:
-                if self.__dir_proc.cond_mngr.branch_active:
-                    if code_type == CodeType.CODE:
-                        code_part = self.__dir_proc.expand_macros(code_part)
-            if generate_output:
-                self.__output.add_code(code_part, code_type)
-        if self.__dir_proc.cond_mngr.branch_depth != original_branch_depth:
-            log.err("Unexpected #if detected.")
-
-
 class Directive():
     def __init__(self, re_ptrn: re.Pattern = None, handler: Callable[[str], None] = None) -> None:
         self.re_ptrn: re.Pattern = re_ptrn
@@ -222,35 +186,66 @@ class Macro():
         return exp_code.lstrip()
 
 
-class DirectiveProcessor():
-    def __init__(self, parent_cpp: CPreprocessor) -> None:
-        self.cpp: CPreprocessor = parent_cpp
-        self.cond_mngr: ConditionManager = ConditionManager()
-        self.eval: Evaluator = Evaluator()
+class CPreprocessor():
+    def __init__(self) -> None:
+        self.__file_io: FileIO = FileIO()
+        self.__output: PreprocOutput = PreprocOutput()
+        self.__cond_mngr: ConditionManager = ConditionManager()
         self.macros: dict[Macro] = {}
         self.directives: tuple[Directive] = (
-            Directive(re.compile(r"^[ \t]*#\s*define", re.ASCII + re.MULTILINE), self.process_define),
+            Directive(re.compile(r"^[ \t]*#\s*define", re.ASCII + re.MULTILINE), self.__process_define),
         )
         self.directives_conditional: tuple[Directive] = (
-            Directive(re.compile(r"^[ \t]*#\s*if", re.ASCII + re.MULTILINE), self.process_if),
+            Directive(re.compile(r"^[ \t]*#\s*if", re.ASCII + re.MULTILINE), self.__process_if),
         )
 
-    def process_directives(self, code: str) -> bool:
-        processed = False
-        if self.cond_mngr.branch_search_active:
-            # Process only conditional directives to correctly update the brach state stack and
-            # detect elif/else for SEARCH branch state.
-            for directive in self.directives_conditional:
-                processed = directive.process(code)
-                if processed:
-                    break
-            if self.cond_mngr.branch_active and not processed:
-                # Process non-conditional directives in the active conditional branch.
-                for directive in self.directives:
-                    processed = directive.process(code)
-                    if processed:
-                        break
-        return processed
+    @property
+    def output(self) -> str:
+        return self.__output.code
+
+    def add_include_dirs(self, *dir_paths: str) -> None:
+        self.__file_io.add_include_dir(dir_paths)
+
+    def process_file(self, file_path: str, generate_output: bool = True) -> None:
+        file_code = self.__file_io.read_include_file(file_path)
+        self.process_code(file_code, generate_output)
+
+    def process_code(self, code: str, generate_output: bool = True) -> None:
+        original_branch_depth = self.__cond_mngr.branch_depth
+        code = CodeFormatter.replace_tabs(code)
+        # code = CodeFormatter.remove_comments(code, replace_with_newlines=True)
+        # code = CodeFormatter.remove_line_escapes(code, True)
+        input = PreprocInput()
+        for (code_type, code_part) in input.get_next_code_part(code):
+            if code_type == CodeType.DIRECTIVE:
+                self.__process_directives(code_part)
+            else:
+                if self.__cond_mngr.branch_active:
+                    if code_type == CodeType.CODE:
+                        code_part = self.expand_macros(code_part)
+            if generate_output:
+                self.__output.add_code(code_part, code_type)
+        if self.__cond_mngr.branch_depth != original_branch_depth:
+            log.err("Unexpected #if detected.")
+
+    def evaluate(self, expr_code: str) -> any:
+        expr_code = self.__preproc_eval_expr(expr_code)
+        # Expression must already be preprocessed, i.e., lines joined, comments removed, macros expanded.
+        expr_code = expr_code.replace("&&", " and ").replace("||", " or ").replace("/", "//")
+        re.sub(r"!([^?==])", r" not \1", expr_code)
+        try:
+            # TODO: Make eval more safe by restricting certain commands or whole imports.
+            output = eval(expr_code)
+        except (SyntaxError, NameError, TypeError, ZeroDivisionError):
+            output = False
+        return output
+
+    def is_true(self, expr_code: str) -> bool:
+        expr_code = self.__preproc_eval_expr(expr_code)
+        state = self.evaluate(expr_code)
+        if type(state) is str:
+            return False
+        return bool(state)
 
     def expand_macros(self, code: str, exp_depth: int = 0) -> str:
         exp_code = code
@@ -287,21 +282,24 @@ class DirectiveProcessor():
                 macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, macro.args)
         return exp_code
 
-    def __insert_expanded_macro(self, code: str, macro_ref_start_pos: int, macro_ref_end_pos: int, exp_macro_code: str) -> str:
-        out_code = code[:macro_ref_start_pos]
-        if "\n" in exp_macro_code:
-            # Indent macro body lines 1 and more using the indentation of the code line where the macro is referenced.
-            macro_insert_line = out_code.splitlines()[-1] if "\n" in out_code else out_code
-            strip_insert_line = macro_insert_line.lstrip()
-            # Get whitespace characters used for the indentation of the code line where the macro is referenced.
-            indent_symbols = macro_insert_line[: -len(strip_insert_line)] if strip_insert_line else macro_insert_line
-            # Add whitespace indentation characters before each macro body line that isn't empty, starting from the second line.
-            exp_macro_code = "\n".join([f"{indent_symbols}{line}".rstrip() if idx > 0 else line
-                                        for (idx, line) in enumerate(exp_macro_code.splitlines())])
-        out_code = f"{out_code}{exp_macro_code}{code[macro_ref_end_pos:]}"
-        return out_code
+    def __process_directives(self, code: str) -> bool:
+        processed = False
+        if self.__cond_mngr.branch_search_active:
+            # Process only conditional directives to correctly update the brach state stack and
+            # detect elif/else for SEARCH branch state.
+            for directive in self.directives_conditional:
+                processed = directive.process(code)
+                if processed:
+                    break
+            if self.__cond_mngr.branch_active and not processed:
+                # Process non-conditional directives in the active conditional branch.
+                for directive in self.directives:
+                    processed = directive.process(code)
+                    if processed:
+                        break
+        return processed
 
-    def process_define(self, expr_code: str) -> None:
+    def __process_define(self, expr_code: str) -> None:
         macro_code = CodeFormatter.remove_line_escapes(expr_code, True)
         re_match = re.match(r"\s*(?P<ident>\w+)(?:\((?P<args>[^\)]*)\))?", macro_code, re.ASCII + re.MULTILINE)
         if re_match is not None:
@@ -317,18 +315,22 @@ class DirectiveProcessor():
         else:
             log.err(f"#define with an unexpected formatting detected:\n{expr_code}")
 
-    def process_if(self, expr_code: str) -> None:
-        expr = self.__preprocess_conditional_expr(expr_code)
-        is_true = self.eval.is_true(expr)
-        self.cond_mngr.enter_if(is_true)
+    def __process_if(self, expr_code: str) -> None:
+        is_true = self.is_true(expr_code)
+        self.__cond_mngr.enter_if(is_true)
 
-    def __preprocess_conditional_expr(self, expr_code: str) -> str:
-        pass
-        # if, elif, ifdef, ifndef
-        # TODO: Expand macros (remove comments after each expansion because macro bodies can contain comments).
-        # TODO: Evaluate defined(...) to 1 / 0.
-        # TODO: Remove comments.
-        # TODO: Join escaped lines.
+    def __preproc_eval_expr(self, code: str) -> str:
+        def repl_defined(match: re.Match) -> str:
+            macro_ident = match.group("macro_ident")
+            return " 1" if macro_ident is not None and macro_ident in self.macros else " 0"
+
+        out_code = self.expand_macros(code)
+        out_code = CodeFormatter.remove_line_escapes(out_code)
+        out_code = CodeFormatter.remove_comments(out_code)
+        out_code = re.sub(r"(?:^|[ \t])defined[ \t]*\(?\s*(?P<macro_ident>\w+)[ \t]*\)?",
+                          repl_defined, out_code, 0, re.ASCII + re.MULTILINE)
+        out_code = CodeFormatter.remove_empty_lines(out_code)
+        return out_code
 
     def __get_macro_ident_pos(self, code: str, macro_ident: str, has_args: bool = False) -> int:
         macro_id_pos = -1
@@ -353,3 +355,17 @@ class DirectiveProcessor():
                     args.append(temp_arg.strip())
                     arg_idx += 1
         return args
+
+    def __insert_expanded_macro(self, code: str, macro_ref_start_pos: int, macro_ref_end_pos: int, exp_macro_code: str) -> str:
+        out_code = code[:macro_ref_start_pos]
+        if "\n" in exp_macro_code:
+            # Indent macro body lines 1 and more using the indentation of the code line where the macro is referenced.
+            macro_insert_line = out_code.splitlines()[-1] if "\n" in out_code else out_code
+            strip_insert_line = macro_insert_line.lstrip()
+            # Get whitespace characters used for the indentation of the code line where the macro is referenced.
+            indent_symbols = macro_insert_line[: -len(strip_insert_line)] if strip_insert_line else macro_insert_line
+            # Add whitespace indentation characters before each macro body line that isn't empty, starting from the second line.
+            exp_macro_code = "\n".join([f"{indent_symbols}{line}".rstrip() if idx > 0 else line
+                                        for (idx, line) in enumerate(exp_macro_code.splitlines())])
+        out_code = f"{out_code}{exp_macro_code}{code[macro_ref_end_pos:]}"
+        return out_code
