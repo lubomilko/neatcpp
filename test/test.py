@@ -6,7 +6,7 @@ CURR_DIR_PATH = str(Path(__file__).parent)
 sys.path.append(str(Path(CURR_DIR_PATH, "..").resolve()))
 
 
-from cpreproc.cpreproc import CPreprocessor
+from cpreproc import CPreprocessor
 
 
 def compare_output(generated_file: Path, expected_file: Path) -> None:
@@ -23,7 +23,7 @@ def compare_output(generated_file: Path, expected_file: Path) -> None:
     else:
         print(f"ERROR: Generated output file '{generated_file.name}' does not match the "
               f"expected output file '{expected_file.name}'.")
-    
+
 
 def main() -> None:
     cpp = CPreprocessor()
@@ -33,12 +33,14 @@ def main() -> None:
     compare_output(Path(CURR_DIR_PATH, "src1_out.c"), Path(CURR_DIR_PATH, "src1_exp.c"))
 
     cpp = CPreprocessor()
+    cpp.add_include_dirs(f"{CURR_DIR_PATH}/incl_common")
     cpp.process_file(f"{CURR_DIR_PATH}/src2.c")
     with open(f"{CURR_DIR_PATH}/src2_out.c", "w", encoding="utf-8") as file:
         file.write(cpp.output)
     compare_output(Path(CURR_DIR_PATH, "src2_out.c"), Path(CURR_DIR_PATH, "src2_exp.c"))
 
     cpp = CPreprocessor()
+    cpp.add_include_dirs(f"{CURR_DIR_PATH}/incl_hstgr", f"{CURR_DIR_PATH}/incl_common")
     cpp.process_file(f"{CURR_DIR_PATH}/src3.c")
     with open(f"{CURR_DIR_PATH}/src3_out.c", "w", encoding="utf-8") as file:
         file.write(cpp.output)
