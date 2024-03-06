@@ -40,11 +40,14 @@
 #define utltype_PRFX_UC(TYPE_NAME)                          utltype_PRFX_UC_ ## TYPE_NAME ## _D
 #define utltype_REF_MACRO_EXP_ARGS(REF_MACRO_NAME, ...)     REF_MACRO_NAME(__VA_ARGS__)
 
-#define avrg_DEFINE_FUNC_AVERAGE(STRG_CLS, VAL_T, SUM_T) \
+#define avrg_DEFINE_FUNC_AVERAGE\
+(STRG_CLS, VAL_T, SUM_T) \
     utltype_REF_MACRO_EXP_ARGS(avrg_DIRECT_DEFINE_FUNC_AVERAGE, STRG_CLS, \
         VAL_T, utltype_PRFX_LC(VAL_T), SUM_T, utltype_PRFX_LC(SUM_T))
 
-#define avrg_DIRECT_DEFINE_FUNC_AVERAGE(STRG_CLS, VAL_T, VAL_P, SUM_T, SUM_P) \
+#define avrg_DIRECT_DEFINE_FUNC_AVERAGE(STRG_CLS, \
+    VAL_T, VAL_P, SUM_T, SUM_P\
+    ) \
     STRG_CLS VAL_T avrg_ ## VAL_P ## Average_ ## SUM_P ## Sum(const VAL_T a ## VAL_P ## Vals[], \
         UNSIGNED16 u16ValsNum, BOOL8 bRound)\
     {\
