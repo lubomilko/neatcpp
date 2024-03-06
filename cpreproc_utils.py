@@ -52,7 +52,7 @@ class CodeFormatter():
 
     @staticmethod
     def remove_line_escapes(code: str, keep_newlines: bool = False) -> str:
-        repl_str = "\n" if keep_newlines else " "
+        repl_str = "\n" if keep_newlines else ""
         out_code = CodeFormatter.RE_PTRN_LINE_CONT.sub(repl_str, code)
         return out_code
 
