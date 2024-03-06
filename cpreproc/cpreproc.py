@@ -204,7 +204,7 @@ class CPreprocessor():
         return self.__output.code
 
     def add_include_dirs(self, *dir_paths: str) -> None:
-        self.__file_io.add_include_dir(dir_paths)
+        self.__file_io.add_include_dir(*dir_paths)
 
     def process_file(self, file_path: str, generate_output: bool = True) -> None:
         file_code = self.__file_io.read_include_file(file_path)
