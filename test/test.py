@@ -46,6 +46,12 @@ def main() -> None:
         file.write(cpp.output)
     compare_output(Path(CURR_DIR_PATH, "src3_out.c"), Path(CURR_DIR_PATH, "src3_exp.c"))
 
+    cpp = CPreprocessor()
+    cpp.process_file(f"{CURR_DIR_PATH}/src4.c")
+    with open(f"{CURR_DIR_PATH}/src4_out.c", "w", encoding="utf-8") as file:
+        file.write(cpp.output)
+    compare_output(Path(CURR_DIR_PATH, "src4_out.c"), Path(CURR_DIR_PATH, "src4_exp.c"))
+
 
 if __name__ == "__main__":
     main()
