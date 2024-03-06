@@ -193,10 +193,16 @@ class CPreprocessor():
         self.macros: dict[Macro] = {}
         self.directives: tuple[Directive] = (
             Directive(re.compile(r"^[ \t]*#[ \t]*define[ \t]+(?P<ident>\w+)(?:\((?P<args>[^\)]*)\))?", re.ASCII), self.__process_define),
+            Directive(re.compile(r"^[ \t]*#[ \t]*undef[ \t]+(?P<ident>\w+)", re.ASCII), self.__process_undef),
             Directive(re.compile(r"^[ \t]*#[ \t]*include[ \t]+(?:\"|<)(?P<file>[^\">]+)(?:\"|>)", re.ASCII), self.__process_include)
         )
         self.directives_conditional: tuple[Directive] = (
             Directive(re.compile(r"^[ \t]*#[ \t]*if[ \t]+(?P<expr>.*)", re.ASCII), self.__process_if),
+            Directive(re.compile(r"^[ \t]*#[ \t]*elif[ \t]+(?P<expr>.*)", re.ASCII), self.__process_elif),
+            Directive(re.compile(r"^[ \t]*#[ \t]*else(?:\s|$)", re.ASCII), self.__process_else),
+            Directive(re.compile(r"^[ \t]*#[ \t]*endif(?:\s|$)", re.ASCII), self.__process_endif),
+            Directive(re.compile(r"^[ \t]*#[ \t]*ifdef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifdef),
+            Directive(re.compile(r"^[ \t]*#[ \t]*ifndef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifndef)
         )
 
     @property
@@ -285,22 +291,21 @@ class CPreprocessor():
 
     def __process_directives(self, code: str) -> bool:
         processed = False
-        if self.__cond_mngr.branch_search_active:
-            # Process conditional directives to correctly update the brach state stack and
-            # detect elif/else for SEARCH branch state.
-            for directive in self.directives_conditional:
+        # Process conditional directives to correctly update the brach state stack and
+        # detect elif/else for SEARCH branch state.
+        for directive in self.directives_conditional:
+            processed = directive.process(code)
+            if processed:
+                break
+        if not processed and self.__cond_mngr.branch_active:
+            # Process non-conditional directives in the active conditional branch.
+            for directive in self.directives:
                 processed = directive.process(code)
                 if processed:
                     break
-            if self.__cond_mngr.branch_active and not processed:
-                # Process non-conditional directives in the active conditional branch.
-                for directive in self.directives:
-                    processed = directive.process(code)
-                    if processed:
-                        break
         return processed
 
-    def __process_include(self, parts: dict[str, str | None], code: str) -> bool:
+    def __process_include(self, parts: dict[str, str | None], code: str) -> None:
         if parts["file"] is not None:
             self.process_file(parts["file"], False)
 
@@ -328,19 +333,40 @@ class CPreprocessor():
         else:
             log.err(f"#define with an unexpected formatting detected:\n{code}")
 
+    def __process_undef(self, parts: dict[str, str | None], code: str) -> None:
+        if parts["expr"] is not None and parts["expr"] in self.macros:
+            del self.macros[parts["expr"]]
+
     def __process_if(self, parts: dict[str, str | None], code: str) -> None:
-        is_true = self.is_true(parts["expr"]) if parts["expr"] is not None else False
+        is_true = self.is_true(parts["expr"]) if self.__cond_mngr.branch_active else False
         self.__cond_mngr.enter_if(is_true)
+
+    def __process_elif(self, parts: dict[str, str | None], code: str) -> None:
+        is_true = self.is_true(parts["expr"]) if self.__cond_mngr.branch_search_active else False
+        self.__cond_mngr.enter_elif(is_true)
+
+    def __process_else(self, parts: dict[str, str | None], code: str) -> None:
+        self.__cond_mngr.enter_elif(True)
+
+    def __process_endif(self, parts: dict[str, str | None], code: str) -> None:
+        self.__cond_mngr.exit_if()
+
+    def __process_ifdef(self, parts: dict[str, str | None], code: str) -> None:
+        self.__cond_mngr.enter_if(parts["expr"] in self.macros)
+
+    def __process_ifndef(self, parts: dict[str, str | None], code: str) -> None:
+        self.__cond_mngr.enter_if(parts["expr"] not in self.macros)
 
     def __preproc_eval_expr(self, code: str) -> str:
         def repl_defined(match: re.Match) -> str:
-            macro_ident = match.group("macro_ident")
-            return " 1" if macro_ident is not None and macro_ident in self.macros else " 0"
+            ident = match.group("ident")
+            return " 1" if ident is not None and ident in self.macros else " 0"
 
         out_code = self.expand_macros(code)
         out_code = CodeFormatter.remove_line_escapes(out_code)
         out_code = CodeFormatter.remove_comments(out_code)
-        out_code = re.sub(r"(?:^|[ \t])defined[ \t]*\(?\s*(?P<macro_ident>\w+)[ \t]*\)?",
+        out_code = CodeFormatter.remove_num_type_suffix(out_code)
+        out_code = re.sub(r"(?:^|[ \t])defined[ \t]*\(?\s*(?P<ident>\w+)[ \t]*\)?",
                           repl_defined, out_code, 0, re.ASCII + re.MULTILINE)
         out_code = CodeFormatter.remove_empty_lines(out_code)
         return out_code
