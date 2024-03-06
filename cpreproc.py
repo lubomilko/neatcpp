@@ -135,17 +135,16 @@ class PreprocOutput():
 
 
 class Directive():
-    def __init__(self, re_ptrn: re.Pattern = None, handler: Callable[[str], None] = None) -> None:
+    def __init__(self, re_ptrn: re.Pattern = None, handler: Callable[[dict[str, str | None], str], None] = None) -> None:
         self.re_ptrn: re.Pattern = re_ptrn
-        self.handler: Callable[[str], None] = handler
+        self.handler: Callable[[dict[str, str | None], str], None] = handler
 
     def process(self, code: str) -> bool:
         processed = False
-        code_lines = code.splitlines()
-        re_match = self.re_ptrn.match(code_lines[0])
+        joined_code = CodeFormatter.remove_line_escapes(code)
+        re_match = self.re_ptrn.match(joined_code)
         if re_match:
-            code_lines[0] = code_lines[0][re_match.end():].lstrip()
-            self.handler("\n".join(code_lines))
+            self.handler(re_match.groupdict(), code)
             processed = True
         return processed
 
@@ -193,10 +192,11 @@ class CPreprocessor():
         self.__cond_mngr: ConditionManager = ConditionManager()
         self.macros: dict[Macro] = {}
         self.directives: tuple[Directive] = (
-            Directive(re.compile(r"^[ \t]*#\s*define", re.ASCII + re.MULTILINE), self.__process_define),
+            Directive(re.compile(r"^[ \t]*#[ \t]*define[ \t]+(?P<ident>\w+)(?:\((?P<args>[^\)]*)\))?", re.ASCII), self.__process_define),
+            Directive(re.compile(r"^[ \t]*#[ \t]*include[ \t]+(?:\"|<)(?P<file>[^\">]+)(?:\"|>)", re.ASCII), self.__process_include)
         )
         self.directives_conditional: tuple[Directive] = (
-            Directive(re.compile(r"^[ \t]*#\s*if", re.ASCII + re.MULTILINE), self.__process_if),
+            Directive(re.compile(r"^[ \t]*#[ \t]*if[ \t]+(?P<expr>.*)", re.ASCII), self.__process_if),
         )
 
     @property
@@ -299,24 +299,35 @@ class CPreprocessor():
                         break
         return processed
 
-    def __process_define(self, expr_code: str) -> None:
-        macro_code = CodeFormatter.remove_line_escapes(expr_code, True)
-        re_match = re.match(r"\s*(?P<ident>\w+)(?:\((?P<args>[^\)]*)\))?", macro_code, re.ASCII + re.MULTILINE)
-        if re_match is not None:
-            ident = re_match.group("ident")
-            args = [arg.strip() for arg in re_match.group("args").split(",")] if re_match.group("args") else []
-            body = macro_code[re_match.end():].rstrip()
-            if body.startswith("\n"):
-                body = body[1:]
-                body = dedent(body)
-            else:
-                body = body.lstrip()
-            self.macros[ident] = Macro(ident, args, body)
-        else:
-            log.err(f"#define with an unexpected formatting detected:\n{expr_code}")
+    def __process_include(self, parts: dict[str, str | None], code: str) -> bool:
+        pass
 
-    def __process_if(self, expr_code: str) -> None:
-        is_true = self.is_true(expr_code)
+    def __process_define(self, parts: dict[str, str | None], code: str) -> None:
+        if parts["ident"] is not None:
+            ident = parts["ident"]
+            args_list = [arg.strip() for arg in parts["args"].split(",")] if parts["args"] is not None else []
+
+            multiline_code = CodeFormatter.remove_line_escapes(code, True)
+            # Find the starting position of the macro body, i.e., the last argument position or the end position of the macro identifier.
+            if args_list:
+                re_match = re.search(rf"{args_list[-1]}\s*\)", multiline_code, re.ASCII)
+            else:
+                re_match = re.search(rf"{ident}[ \t]*", multiline_code, re.ASCII)
+            if re_match is not None:
+                body = multiline_code[re_match.end():].rstrip()
+                if body.startswith("\n"):
+                    body = body[1:]
+                    body = dedent(body)
+                else:
+                    body = body.lstrip()
+                self.macros[ident] = Macro(ident, args_list, body)
+            else:
+                log.err(f"Macro body not detected:\n{code}")
+        else:
+            log.err(f"#define with an unexpected formatting detected:\n{code}")
+
+    def __process_if(self, parts: dict[str, str | None], code: str) -> None:
+        is_true = self.is_true(code)
         self.__cond_mngr.enter_if(is_true)
 
     def __preproc_eval_expr(self, code: str) -> str:
