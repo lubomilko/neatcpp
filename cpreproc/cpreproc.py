@@ -3,8 +3,8 @@ from enum import IntEnum
 from typing import Generator
 from textwrap import dedent
 from typing import Callable
-from cpreproc_utils import FileIO, CodeFormatter
-from logger import log
+from .cpreproc_utils import FileIO, CodeFormatter
+from .logger import log
 
 
 __all__ = ["CPreprocessor"]
@@ -208,7 +208,8 @@ class CPreprocessor():
 
     def process_file(self, file_path: str, generate_output: bool = True) -> None:
         file_code = self.__file_io.read_include_file(file_path)
-        self.process_code(file_code, generate_output)
+        if file_code:
+            self.process_code(file_code, generate_output)
 
     def process_code(self, code: str, generate_output: bool = True) -> None:
         original_branch_depth = self.__cond_mngr.branch_depth
@@ -285,7 +286,7 @@ class CPreprocessor():
     def __process_directives(self, code: str) -> bool:
         processed = False
         if self.__cond_mngr.branch_search_active:
-            # Process only conditional directives to correctly update the brach state stack and
+            # Process conditional directives to correctly update the brach state stack and
             # detect elif/else for SEARCH branch state.
             for directive in self.directives_conditional:
                 processed = directive.process(code)
@@ -300,7 +301,8 @@ class CPreprocessor():
         return processed
 
     def __process_include(self, parts: dict[str, str | None], code: str) -> bool:
-        pass
+        if parts["file"] is not None:
+            self.process_file(parts["file"], False)
 
     def __process_define(self, parts: dict[str, str | None], code: str) -> None:
         if parts["ident"] is not None:
@@ -327,7 +329,7 @@ class CPreprocessor():
             log.err(f"#define with an unexpected formatting detected:\n{code}")
 
     def __process_if(self, parts: dict[str, str | None], code: str) -> None:
-        is_true = self.is_true(code)
+        is_true = self.is_true(parts["expr"]) if parts["expr"] is not None else False
         self.__cond_mngr.enter_if(is_true)
 
     def __preproc_eval_expr(self, code: str) -> str:

@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from logger import log
+from .logger import log
 
 
 class FileIO():
