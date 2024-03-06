@@ -38,6 +38,7 @@ class CodeFormatter():
     RE_PTRN_MLINE_CMNT = re.compile(r"/\*.*?\*/", re.ASCII + re.DOTALL)
     RE_PTRN_SLINE_CMNT = re.compile(r"//[^\n]*", re.ASCII)
     RE_PTRN_LINE_CONT = re.compile(r"[ \t]*\\[ \t]*\n", re.ASCII)
+    RE_PTRN_NUM_CONST = re.compile(r"(?P<num>\d[\d.]*\d*)(?:[uUlLfF]+)", re.ASCII)
 
     @staticmethod
     def replace_tabs(code: str, tab_size: int = 4) -> str:
@@ -76,6 +77,14 @@ class CodeFormatter():
         elif replace_with_newlines:
             out_code = CodeFormatter.RE_PTRN_MLINE_CMNT.sub(__repl_with_newlines, out_code)
             out_code = CodeFormatter.RE_PTRN_SLINE_CMNT.sub(__repl_with_newlines, out_code)
+        return out_code
+
+    @staticmethod
+    def remove_num_type_suffix(code: str) -> str:
+        def __repl_num_wo_suffix(match: re.Match) -> str:
+            return match.group("num")
+
+        out_code = CodeFormatter.RE_PTRN_NUM_CONST.sub(__repl_num_wo_suffix, code)
         return out_code
 
     @staticmethod
