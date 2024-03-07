@@ -217,7 +217,7 @@ class PreprocInput():
             # Detect and extract multiple empty lines.
             elif not in_line:
                 while line_idx < code_lines_num and not in_lines[line_idx].strip():
-                    out_lines.append("\n")
+                    out_lines.append("")
                     line_idx += 1
 
             out_code = "\n".join(out_lines)
@@ -459,8 +459,8 @@ class CPreprocessor():
             print(f"ERROR: #define with an unexpected formatting detected:\n{code}")
 
     def __process_undef(self, parts: dict[str, str | None], code: str) -> None:
-        if parts["expr"] is not None and parts["expr"] in self.macros:
-            del self.macros[parts["expr"]]
+        if parts["ident"] is not None and parts["ident"] in self.macros:
+            del self.macros[parts["ident"]]
 
     def __process_if(self, parts: dict[str, str | None], code: str) -> None:
         is_true = self.is_true(parts["expr"]) if self.__cond_mngr.branch_active else False
@@ -483,18 +483,23 @@ class CPreprocessor():
         self.__cond_mngr.enter_if(parts["expr"] not in self.macros)
 
     def __preproc_eval_expr(self, code: str) -> str:
+        out_code = self.__eval_defined(code)
+        out_code = self.expand_macros(out_code)
+        out_code = CodeFormatter.remove_line_escapes(out_code)
+        out_code = CodeFormatter.remove_comments(out_code)
+        out_code = CodeFormatter.remove_num_type_suffix(out_code)
+        # Evaluate defined expressions again in case there are new ones comeing from expanded macros.
+        out_code = self.__eval_defined(out_code)
+        out_code = CodeFormatter.remove_empty_lines(out_code)
+        return out_code
+
+    def __eval_defined(self, code: str) -> str:
         def repl_defined(match: re.Match) -> str:
             ident = match.group("ident")
             return " 1" if ident is not None and ident in self.macros else " 0"
 
-        out_code = self.expand_macros(code)
-        out_code = CodeFormatter.remove_line_escapes(out_code)
-        out_code = CodeFormatter.remove_comments(out_code)
-        out_code = CodeFormatter.remove_num_type_suffix(out_code)
-        out_code = re.sub(r"(?:^|[ \t])defined[ \t]*\(?\s*(?P<ident>\w+)[ \t]*\)?",
-                          repl_defined, out_code, 0, re.ASCII + re.MULTILINE)
-        out_code = CodeFormatter.remove_empty_lines(out_code)
-        return out_code
+        return re.sub(r"(?:^|[ \t])defined[ \t]*\(?\s*(?P<ident>\w+)[ \t]*\)?",
+                      repl_defined, code, 0, re.ASCII + re.MULTILINE)
 
     def __get_macro_ident_pos(self, code: str, macro_ident: str, has_args: bool = False) -> int:
         macro_id_pos = -1
