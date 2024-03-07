@@ -32,6 +32,84 @@
 
 B(5)    /* Expected: 5 + 7u */
 
+
+
 /* Expected: 
 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1*/
 REP(1, 5, 1)
+
+
+#define MACRO_A 7
+#define MACRO_B 11
+
+#ifdef MACRO_A
+    #if (MACRO_A + 5) > 10 && defined MACRO_B
+        #define MACRO_C  MACRO_A
+    #elif defined MACRO_B
+        #define MACRO_C  MACRO_B
+    #else
+        #define MACRO_C  0
+    #endif
+#elif defined(MACRO_B)
+    #define MACRO_C  1
+#endif
+
+MACRO_C /* Expected: 7 */
+
+#undef MACRO_A
+#undef MACRO_B
+
+#define MACRO_A 5
+#define MACRO_B 11
+
+#ifdef MACRO_A
+    #if (MACRO_A + 5) > 10 && defined MACRO_B
+        #define MACRO_C  MACRO_A
+    #elif defined MACRO_B
+        #define MACRO_C  MACRO_B
+    #else
+        #define MACRO_C  0
+    #endif
+#elif defined(MACRO_B)
+    #define MACRO_C  1
+#endif
+
+MACRO_C /* Expected: 11 */
+
+#undef MACRO_A
+#undef MACRO_B
+
+#define MACRO_A 5
+
+#ifdef MACRO_A
+    #if (MACRO_A + 5) > 10 && defined MACRO_B
+        #define MACRO_C  MACRO_A
+    #elif defined MACRO_B
+        #define MACRO_C  MACRO_B
+    #else
+        #define MACRO_C  0
+    #endif
+#elif defined(MACRO_B)
+    #define MACRO_C  1
+#endif
+
+MACRO_C /* Expected: 0 */
+
+
+#undef MACRO_A
+
+#define MACRO_B 11
+
+#ifdef MACRO_A
+    #if (MACRO_A + 5) > 10 && defined MACRO_B
+        #define MACRO_C  MACRO_A
+    #elif defined MACRO_B
+        #define MACRO_C  MACRO_B
+    #else
+        #define MACRO_C  0
+    #endif
+#elif defined(MACRO_B)
+    #define MACRO_C  1
+#endif
+
+MACRO_C /* Expected: 1 */
