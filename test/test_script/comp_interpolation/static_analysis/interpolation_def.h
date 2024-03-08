@@ -49,7 +49,7 @@ extern SIGNED16 intrpl_s16InterpolationLinear(
     SIGNED16 s16Y1,
     SIGNED16 s16Xi,
     BOOL8 bExtrapolate,
-    BOOL8 bRound);;
+    BOOL8 bRound);
 
 extern SIGNED16 intrpl_s16DataSetInterpolationLinear(
     SIGNED16 as16PointsX[],
@@ -57,7 +57,7 @@ extern SIGNED16 intrpl_s16DataSetInterpolationLinear(
     UNSIGNED16 u16PointsNum,
     SIGNED16 s16Xi,
     BOOL8 bExtrapolate,
-    BOOL8 bRound);;
+    BOOL8 bRound);
 
 /*--------------------------------------------------------------------------------------------------
  * PUBLIC CONSTANT DECLARATIONS

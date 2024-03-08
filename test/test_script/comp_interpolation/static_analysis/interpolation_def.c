@@ -25,7 +25,7 @@
 /*--------------------------------------------------------------------------------------------------
  * INCLUDED FILES
  *--------------------------------------------------------------------------------------------------*/
-#include "interpolation.h"
+#include "interpolation_def.h"
 
 /*--------------------------------------------------------------------------------------------------
  * COMPILER DIRECTIVES
@@ -137,7 +137,7 @@ SIGNED16 intrpl_s16InterpolationLinear(
     }
 
     return (SIGNED16)s32Yo;
-};
+}
 
 // intrpl_DEFINE_FUNC_DATA_SET_INTERPOLATION_LINEAR(, SIGNED16, intrpl_s16InterpolationLinear);
 

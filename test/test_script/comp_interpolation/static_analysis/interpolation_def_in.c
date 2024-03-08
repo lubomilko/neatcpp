@@ -25,7 +25,7 @@
 /*--------------------------------------------------------------------------------------------------
  * INCLUDED FILES
  *--------------------------------------------------------------------------------------------------*/
-#include "interpolation.h"
+#include "interpolation_def.h"
 
 /*--------------------------------------------------------------------------------------------------
  * COMPILER DIRECTIVES
@@ -54,7 +54,7 @@
 /*--------------------------------------------------------------------------------------------------
  * PUBLIC FUNCTION DEFINITIONS
  *--------------------------------------------------------------------------------------------------*/
-intrpl_DEFINE_FUNC_INTERPOLATION_LINEAR(, SIGNED16);
+intrpl_DEFINE_FUNC_INTERPOLATION_LINEAR(, SIGNED16)
 
 // intrpl_DEFINE_FUNC_DATA_SET_INTERPOLATION_LINEAR(, SIGNED16, intrpl_s16InterpolationLinear);
 

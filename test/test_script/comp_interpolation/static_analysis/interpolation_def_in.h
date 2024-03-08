@@ -42,9 +42,9 @@
 /*--------------------------------------------------------------------------------------------------
  * PUBLIC FUNCTION DECLARATIONS
  *--------------------------------------------------------------------------------------------------*/
-intrpl_DECLARE_FUNC_INTERPOLATION_LINEAR(extern, SIGNED16);
+intrpl_DECLARE_FUNC_INTERPOLATION_LINEAR(extern, SIGNED16)
 
-intrpl_DECLARE_FUNC_DATA_SET_INTERPOLATION_LINEAR(extern, SIGNED16);
+intrpl_DECLARE_FUNC_DATA_SET_INTERPOLATION_LINEAR(extern, SIGNED16)
 
 /*--------------------------------------------------------------------------------------------------
  * PUBLIC CONSTANT DECLARATIONS
