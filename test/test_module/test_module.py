@@ -4,7 +4,7 @@ from pathlib import Path
 
 CURR_DIR_PATH = Path(__file__).parent
 
-sys.path.append(str(Path(CURR_DIR_PATH, "..").resolve()))
+sys.path.append(str(Path(CURR_DIR_PATH, "../..").resolve()))
 
 
 from cpreproc import CPreprocessor
