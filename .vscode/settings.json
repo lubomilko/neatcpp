@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "hstgr_group_def.h": "c",
-        "hstgr_priv.h": "c"
+        "hstgr_priv.h": "c",
+        "interpolation_def.h": "c"
     }
 }
