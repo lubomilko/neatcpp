@@ -9,37 +9,6 @@ from pathlib import Path
 __all__ = ["CPreprocessor"]
 
 
-class FileIO():
-    def __init__(self) -> None:
-        self.incl_dir_paths: list[Path] = [Path("")]
-
-    def add_include_dir(self, *dir_paths: str) -> None:
-        for dir_path in dir_paths:
-            incl_dir_path = Path(dir_path).resolve()
-
-            if incl_dir_path.is_file():
-                incl_dir_path = incl_dir_path.parent()
-
-            if incl_dir_path.is_dir():
-                if incl_dir_path not in self.incl_dir_paths:
-                    self.incl_dir_paths.append(incl_dir_path)
-            else:
-                print(f"ERROR: Include dir path '{dir_path}' not found.")
-
-    def read_include_file(self, file_path: str) -> str:
-        for incl_dir_path in self.incl_dir_paths:
-            incl_file_path = Path(incl_dir_path, Path(file_path))
-            if incl_file_path.is_file():
-                with open(incl_file_path, "r", encoding="utf-8") as file:
-                    file_code = file.read()
-                break
-        else:
-            print(f"ERROR: Include file path '{file_path}' not found.")
-            file_code = ""
-
-        return file_code
-
-
 class CodeFormatter():
     RE_PTRN_MLINE_CMNT = re.compile(r"/\*.*?\*/", re.ASCII + re.DOTALL)
     RE_PTRN_SLINE_CMNT = re.compile(r"//[^\n]*", re.ASCII)
@@ -135,6 +104,40 @@ class CodeFormatter():
         return in_string
 
 
+class FileIO():
+    def __init__(self) -> None:
+        self.incl_dir_paths: list[Path] = [Path("")]
+
+    def reset(self) -> None:
+        self.incl_dir_paths = [Path("")]
+
+    def add_include_dir(self, *dir_paths: str) -> None:
+        for dir_path in dir_paths:
+            incl_dir_path = Path(dir_path).resolve()
+
+            if incl_dir_path.is_file():
+                incl_dir_path = incl_dir_path.parent()
+
+            if incl_dir_path.is_dir():
+                if incl_dir_path not in self.incl_dir_paths:
+                    self.incl_dir_paths.append(incl_dir_path)
+            else:
+                print(f"ERROR: Include dir path '{dir_path}' not found.")
+
+    def read_include_file(self, file_path: str) -> str:
+        for incl_dir_path in self.incl_dir_paths:
+            incl_file_path = Path(incl_dir_path, Path(file_path))
+            if incl_file_path.is_file():
+                with open(incl_file_path, "r", encoding="utf-8") as file:
+                    file_code = file.read()
+                break
+        else:
+            print(f"ERROR: Include file path '{file_path}' not found.")
+            file_code = ""
+
+        return file_code
+
+
 class ConditionManager():
     class BranchState(IntEnum):
         ACTIVE = 0  # if/elif/else branch code is enabled and if/elif/else condition is true (active).
@@ -144,6 +147,10 @@ class ConditionManager():
     def __init__(self) -> None:
         self.branch_state: self.BranchState = self.BranchState.ACTIVE
         self.branch_state_stack: list[self.BranchState] = []
+
+    def reset(self) -> None:
+        self.branch_state = self.BranchState.ACTIVE
+        self.branch_state_stack = []
 
     @property
     def branch_depth(self) -> int:
@@ -238,25 +245,34 @@ class PreprocOutput():
     def __init__(self) -> None:
         self.last_space: str = ""
         self.last_comment: str = ""
-        self.code_non_empty: bool = False
+        self.non_empty: bool = False
         self.code: str = ""
+        self.code_all: str = ""
 
-    def add_code(self, code: str, code_type: CodeType) -> None:
+    def reset(self) -> None:
+        self.last_space = ""
+        self.last_comment = ""
+        self.non_empty = False
+        self.code = ""
+        self.code_all = ""
+
+    def add_code_part(self, code_part: str, code_type: CodeType) -> None:
+        self.code_all = f"{self.code_all}{code_part}\n"
         match code_type:
             case CodeType.SPACE:
-                if self.code_non_empty:
-                    self.last_space = f"{code}\n"
+                if self.non_empty:
+                    self.last_space = f"{code_part}\n"
                 self.last_comment = ""
             case CodeType.COMMENT:
-                self.last_comment = f"{self.last_comment}{code}\n"
+                self.last_comment = f"{self.last_comment}{code_part}\n"
             case CodeType.DIRECTIVE:
                 self.last_space = ""
                 self.last_comment = ""
             case CodeType.CODE:
-                self.code = f"{self.code}{self.last_space}{self.last_comment}{code}\n"
+                self.code = f"{self.code}{self.last_space}{self.last_comment}{code_part}\n"
                 self.last_space = ""
                 self.last_comment = ""
-                self.code_non_empty = True
+                self.non_empty = True
 
 
 class Directive():
@@ -315,13 +331,12 @@ class CPreprocessor():
         self.__file_io: FileIO = FileIO()
         self.__output: PreprocOutput = PreprocOutput()
         self.__cond_mngr: ConditionManager = ConditionManager()
-        self.macros: dict[Macro] = {}
-        self.directives: tuple[Directive] = (
+        self.__directives: tuple[Directive] = (
             Directive(re.compile(r"^[ \t]*#[ \t]*define[ \t]+(?P<ident>\w+)(?:\((?P<args>[^\)]*)\))?", re.ASCII), self.__process_define),
             Directive(re.compile(r"^[ \t]*#[ \t]*undef[ \t]+(?P<ident>\w+)", re.ASCII), self.__process_undef),
             Directive(re.compile(r"^[ \t]*#[ \t]*include[ \t]+(?:\"|<)(?P<file>[^\">]+)(?:\"|>)", re.ASCII), self.__process_include)
         )
-        self.directives_conditional: tuple[Directive] = (
+        self.__directives_conditional: tuple[Directive] = (
             Directive(re.compile(r"^[ \t]*#[ \t]*if[ \t]+(?P<expr>.*)", re.ASCII), self.__process_if),
             Directive(re.compile(r"^[ \t]*#[ \t]*elif[ \t]+(?P<expr>.*)", re.ASCII), self.__process_elif),
             Directive(re.compile(r"^[ \t]*#[ \t]*else(?:\s|$)", re.ASCII), self.__process_else),
@@ -329,10 +344,21 @@ class CPreprocessor():
             Directive(re.compile(r"^[ \t]*#[ \t]*ifdef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifdef),
             Directive(re.compile(r"^[ \t]*#[ \t]*ifndef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifndef)
         )
+        self.macros: dict[Macro] = {}
 
     @property
     def output(self) -> str:
         return self.__output.code
+
+    @property
+    def output_full(self) -> str:
+        return self.__output.code_all
+
+    def reset(self) -> None:
+        self.__file_io.reset()
+        self.__output.reset()
+        self.__cond_mngr.reset()
+        self.macros = {}
 
     def add_include_dirs(self, *dir_paths: str) -> None:
         self.__file_io.add_include_dir(*dir_paths)
@@ -356,7 +382,8 @@ class CPreprocessor():
                     if code_type == CodeType.CODE:
                         code_part = self.expand_macros(code_part)
             if generate_output:
-                self.__output.add_code(code_part, code_type)
+                self.__output.add_code_part(code_part, code_type)
+
         if self.__cond_mngr.branch_depth != original_branch_depth:
             print("ERROR: Unexpected #if detected.")
 
@@ -418,13 +445,13 @@ class CPreprocessor():
         processed = False
         # Process conditional directives to correctly update the brach state stack and
         # detect elif/else for SEARCH branch state.
-        for directive in self.directives_conditional:
+        for directive in self.__directives_conditional:
             processed = directive.process(code)
             if processed:
                 break
         if not processed and self.__cond_mngr.branch_active:
             # Process non-conditional directives in the active conditional branch.
-            for directive in self.directives:
+            for directive in self.__directives:
                 processed = directive.process(code)
                 if processed:
                     break
@@ -538,3 +565,11 @@ class CPreprocessor():
                                         for (idx, line) in enumerate(exp_macro_code.splitlines())])
         out_code = f"{out_code}{exp_macro_code}{code[macro_ref_end_pos:]}"
         return out_code
+
+
+def main() -> None:
+    pass
+
+
+if __name__ == "__main__":
+    main()
