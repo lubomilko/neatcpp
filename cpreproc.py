@@ -360,6 +360,9 @@ class CPreprocessor():
         self.__cond_mngr.reset()
         self.macros = {}
 
+    def reset_output(self) -> None:
+        self.__output.reset()
+
     def add_include_dirs(self, *dir_paths: str) -> None:
         self.__file_io.add_include_dir(*dir_paths)
 
@@ -546,7 +549,7 @@ class CPreprocessor():
             for temp_arg in temp_args[1:]:
                 if ((args[arg_idx].count("\"") & 1) or (args[arg_idx].count("\'") & 1) or
                         (args[arg_idx].count("(") != args[arg_idx].count(")"))):
-                    args[arg_idx] += temp_arg
+                    args[arg_idx] = f"{args[arg_idx]}, {temp_arg}"
                 else:
                     args.append(temp_arg.strip())
                     arg_idx += 1
