@@ -139,7 +139,53 @@ SIGNED16 intrpl_s16InterpolationLinear(
     return (SIGNED16)s32Yo;
 }
 
-// intrpl_DEFINE_FUNC_DATA_SET_INTERPOLATION_LINEAR(, SIGNED16, intrpl_s16InterpolationLinear);
+SIGNED16 intrpl_s16DataSetInterpolationLinear(
+    SIGNED16 as16PointsX[],
+    SIGNED16 as16PointsY[],
+    UNSIGNED16 u16PointsNum,
+    SIGNED16 s16Xi,
+    BOOL8 bExtrapolate,
+    BOOL8 bRound)
+{
+    SIGNED16 s16Yo = (SIGNED16)0;
+    UNSIGNED16 u16High = u16PointsNum - 1u;
+    UNSIGNED16 u16Low = 0u;
+    UNSIGNED16 u16Mid;
+    BOOL8 bIsAsc;
+
+    if( (as16PointsX != ((void *)0)) && (as16PointsY != ((void *)0)) && (u16PointsNum > 1u) )
+    {
+        bIsAsc = (as16PointsX[0u] <= as16PointsX[u16High]) ? 0xFFu : 0x00u;
+
+        /* Find the X0 coordinate for Xi using a binary search algorithm. */
+        while((u16High - u16Low) > 1u)
+        {
+            u16Mid = (u16High + u16Low) >> 1u;
+
+            if( ((bIsAsc == 0xFFu) && (as16PointsX[u16Mid] > s16Xi)) ||
+                ((bIsAsc == 0x00u) && (as16PointsX[u16Mid] < s16Xi)) )
+            {
+                u16High = u16Mid;
+            }
+            else
+            {
+                u16Low = u16Mid;
+            }
+        }
+
+        /* Perform linear interpolation. */
+        s16Yo = intrpl_s16InterpolationLinear(
+            as16PointsX[u16Low],
+            as16PointsY[u16Low],
+            as16PointsX[u16Low + 1u],
+            as16PointsY[u16Low + 1u],
+            s16Xi,
+            bExtrapolate,
+            bRound);
+    }
+
+    return s16Yo;
+};
 
 /*--------------------------------------------------------------------------------------------------
  * PRIVATE FUNCTION DEFINITIONS

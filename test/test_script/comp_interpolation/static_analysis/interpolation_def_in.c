@@ -56,7 +56,7 @@
  *--------------------------------------------------------------------------------------------------*/
 intrpl_DEFINE_FUNC_INTERPOLATION_LINEAR(, SIGNED16)
 
-// intrpl_DEFINE_FUNC_DATA_SET_INTERPOLATION_LINEAR(, SIGNED16, intrpl_s16InterpolationLinear);
+intrpl_DEFINE_FUNC_DATA_SET_INTERPOLATION_LINEAR(, SIGNED16, intrpl_s16InterpolationLinear);
 
 /*--------------------------------------------------------------------------------------------------
  * PRIVATE FUNCTION DEFINITIONS
