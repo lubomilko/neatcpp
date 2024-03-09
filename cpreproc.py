@@ -1,4 +1,5 @@
 import re
+import argparse
 from enum import IntEnum
 from typing import Generator
 from textwrap import dedent
@@ -275,6 +276,11 @@ class PreprocOutput():
                 self.non_empty = True
 
 
+class DirectiveGroup(IntEnum):
+    STANDARD = 0
+    CONDITIONAL = 1
+
+
 class Directive():
     def __init__(self, re_ptrn: re.Pattern = None, handler: Callable[[dict[str, str | None], str], None] = None) -> None:
         self.re_ptrn: re.Pattern = re_ptrn
@@ -331,20 +337,21 @@ class CPreprocessor():
         self.__file_io: FileIO = FileIO()
         self.__output: PreprocOutput = PreprocOutput()
         self.__cond_mngr: ConditionManager = ConditionManager()
-        self.__directives: tuple[Directive] = (
-            Directive(re.compile(r"^[ \t]*#[ \t]*define[ \t]+(?P<ident>\w+)(?:\((?P<args>[^\)]*)\))?", re.ASCII), self.__process_define),
-            Directive(re.compile(r"^[ \t]*#[ \t]*undef[ \t]+(?P<ident>\w+)", re.ASCII), self.__process_undef),
-            Directive(re.compile(r"^[ \t]*#[ \t]*include[ \t]+(?:\"|<)(?P<file>[^\">]+)(?:\"|>)", re.ASCII), self.__process_include)
-        )
-        self.__directives_conditional: tuple[Directive] = (
-            Directive(re.compile(r"^[ \t]*#[ \t]*if[ \t]+(?P<expr>.*)", re.ASCII), self.__process_if),
-            Directive(re.compile(r"^[ \t]*#[ \t]*elif[ \t]+(?P<expr>.*)", re.ASCII), self.__process_elif),
-            Directive(re.compile(r"^[ \t]*#[ \t]*else(?:\s|$)", re.ASCII), self.__process_else),
-            Directive(re.compile(r"^[ \t]*#[ \t]*endif(?:\s|$)", re.ASCII), self.__process_endif),
-            Directive(re.compile(r"^[ \t]*#[ \t]*ifdef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifdef),
-            Directive(re.compile(r"^[ \t]*#[ \t]*ifndef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifndef)
-        )
+        self.__directives: tuple[tuple[Directive]] = (
+            # DirectiveGroup.STANDARD
+            (Directive(re.compile(r"^[ \t]*#[ \t]*define[ \t]+(?P<ident>\w+)(?:\((?P<args>[^\)]*)\))?", re.ASCII), self.__process_define),
+             Directive(re.compile(r"^[ \t]*#[ \t]*undef[ \t]+(?P<ident>\w+)", re.ASCII), self.__process_undef),
+             Directive(re.compile(r"^[ \t]*#[ \t]*include[ \t]+(?:\"|<)(?P<file>[^\">]+)(?:\"|>)", re.ASCII), self.__process_include)),
+            # DirectiveGroup.CONDITIONAL
+            (Directive(re.compile(r"^[ \t]*#[ \t]*if[ \t]+(?P<expr>.*)", re.ASCII), self.__process_if),
+             Directive(re.compile(r"^[ \t]*#[ \t]*elif[ \t]+(?P<expr>.*)", re.ASCII), self.__process_elif),
+             Directive(re.compile(r"^[ \t]*#[ \t]*else(?:\s|$)", re.ASCII), self.__process_else),
+             Directive(re.compile(r"^[ \t]*#[ \t]*endif(?:\s|$)", re.ASCII), self.__process_endif),
+             Directive(re.compile(r"^[ \t]*#[ \t]*ifdef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifdef),
+             Directive(re.compile(r"^[ \t]*#[ \t]*ifndef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifndef)))
         self.macros: dict[Macro] = {}
+
+    # ----- INTERFACE METHODS ----- #
 
     @property
     def output(self) -> str:
@@ -363,20 +370,28 @@ class CPreprocessor():
     def reset_output(self) -> None:
         self.__output.reset()
 
+    def save_output_to_file(self, file_path: str, full_output: bool = False) -> None:
+        with open(file_path, "w", encoding="utf-8") as file:
+            output = self.output_full if full_output else self.output
+            file.write(output)
+
     def add_include_dirs(self, *dir_paths: str) -> None:
         self.__file_io.add_include_dir(*dir_paths)
 
-    def process_file(self, file_path: str, generate_output: bool = True) -> None:
+    def process_file(self, file_path: str, global_output: bool = True, full_local_output: bool = False) -> str:
         file_code = self.__file_io.read_include_file(file_path)
+        local_output_code = ""
         if file_code:
-            self.process_code(file_code, generate_output)
+            local_output_code = self.process_code(file_code, global_output, full_local_output)
+        return local_output_code
 
-    def process_code(self, code: str, generate_output: bool = True) -> None:
+    def process_code(self, code: str, global_output: bool = True, full_local_output: bool = False) -> str:
         original_branch_depth = self.__cond_mngr.branch_depth
+        # General code processing.
         code = CodeFormatter.replace_tabs(code)
-        # code = CodeFormatter.remove_comments(code, replace_with_newlines=True)
-        # code = CodeFormatter.remove_line_escapes(code, True)
+        # Extraction and processing of directives, comments, whitespaces and other code parts.
         input = PreprocInput()
+        local_output = PreprocOutput()
         for (code_type, code_part) in input.get_next_code_part(code):
             if code_type == CodeType.DIRECTIVE:
                 self.__process_directives(code_part)
@@ -384,11 +399,12 @@ class CPreprocessor():
                 if self.__cond_mngr.branch_active:
                     if code_type == CodeType.CODE:
                         code_part = self.expand_macros(code_part)
-            if generate_output:
+            if global_output:
                 self.__output.add_code_part(code_part, code_type)
-
+            local_output.add_code_part(code_part, code_type)
         if self.__cond_mngr.branch_depth != original_branch_depth:
             print("ERROR: Unexpected #if detected.")
+        return local_output.code_all if full_local_output else local_output.code
 
     def evaluate(self, expr_code: str) -> any:
         expr_code = self.__preproc_eval_expr(expr_code)
@@ -444,17 +460,19 @@ class CPreprocessor():
                 macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, macro.args)
         return exp_code
 
+    # ----- END OF INTERFACE METHODS ----- #
+
     def __process_directives(self, code: str) -> bool:
         processed = False
         # Process conditional directives to correctly update the brach state stack and
         # detect elif/else for SEARCH branch state.
-        for directive in self.__directives_conditional:
+        for directive in self.__directives[DirectiveGroup.CONDITIONAL]:
             processed = directive.process(code)
             if processed:
                 break
         if not processed and self.__cond_mngr.branch_active:
             # Process non-conditional directives in the active conditional branch.
-            for directive in self.__directives:
+            for directive in self.__directives[DirectiveGroup.STANDARD]:
                 processed = directive.process(code)
                 if processed:
                     break
@@ -547,6 +565,8 @@ class CPreprocessor():
             arg_idx = 0
             args.append(temp_args[0])
             for temp_arg in temp_args[1:]:
+                # Check if the argument args[arg_idx] does not contain uneven number of parentheses or apostrophes, e.g. "value(1".
+                # If yes, then the argument is incomplete and the next argument temp_arg needs to be added to it, e.g. "value(1, 2)".
                 if ((args[arg_idx].count("\"") & 1) or (args[arg_idx].count("\'") & 1) or
                         (args[arg_idx].count("(") != args[arg_idx].count(")"))):
                     args[arg_idx] = f"{args[arg_idx]}, {temp_arg}"
@@ -570,8 +590,36 @@ class CPreprocessor():
         return out_code
 
 
+CLI_DESC = "C preprocessor preserving the formatting and comments in the processed code."
+DEBUG_ARGS_LIST = None
+
+
 def main() -> None:
-    pass
+    parser = argparse.ArgumentParser(description=CLI_DESC)
+    parser.add_argument("in_out_file_pairs", metavar="in_out_files", type=Path, nargs="+",
+                        help="Pairs of input files and generated output files.")
+    parser.add_argument("-i", "--incl_dirs", metavar="include_directories", type=Path, nargs="+",
+                        help="Directories to search for included files.")
+    parser.add_argument("-p", "--proc_files", metavar="process_files", type=Path, nargs="+",
+                        help="Additional files to be processed first without generating an output file.")
+    parser.add_argument("-f", "--full_output", action="store_true",
+                        help="Include all code in the output file, including processed directives, all comments and whitespaces.")
+
+    args = parser.parse_args(DEBUG_ARGS_LIST)
+
+    if len(args.in_out_file_pairs) & 1 == 0:
+        cpreproc = CPreprocessor()
+        if args.incl_dirs is not None:
+            cpreproc.add_include_dirs(*args.incl_dirs)
+        if args.proc_files is not None:
+            for file in args.proc_files:
+                cpreproc.process_file(str(file), False, False)
+        for idx in range(0, len(args.in_out_file_pairs), 2):
+            cpreproc.process_file(str(args.in_out_file_pairs[idx]))
+            cpreproc.save_output_to_file(str(args.in_out_file_pairs[idx + 1]), args.full_output)
+            cpreproc.reset_output()
+    else:
+        parser.error("number of input and output file paths specified by the 'in_out_file_pairs' argument must be even")
 
 
 if __name__ == "__main__":
