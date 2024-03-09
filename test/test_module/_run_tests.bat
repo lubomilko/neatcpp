@@ -3,7 +3,7 @@
 @pushd %~dp0
 
 :: Execute tests.
-pytest test_module.py -v
+pytest test_module.py -s -v
 
 :: Switch back to the original current working directory.
 @popd
