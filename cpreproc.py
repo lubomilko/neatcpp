@@ -1,4 +1,5 @@
 import re
+import sys
 import argparse
 from enum import IntEnum
 from typing import Generator
@@ -10,9 +11,87 @@ from pathlib import Path
 __all__ = ["CPreprocessor"]
 
 
+class Logger():
+    class ErrSeverity(IntEnum):
+        INFO = 0
+        WARNING = 1
+        CRITICAL = 2
+        SEVERE = 3
+
+    def __init__(self, verbosity: int = 0, min_err_severity: int = ErrSeverity.INFO, enable_debug_msg: bool = False) -> None:
+        self.verbosity: int = verbosity
+        self.min_err_severity: int = min_err_severity
+        self.debug_msg_enabled: bool = enable_debug_msg
+        self.__msg_printer: Callable[[str, bool, str], None] = self.default_msg_printer
+        self.__err_printer: Callable[[str, self.ErrSeverity, str], None] = self.default_err_printer
+
+    def config(self, verbosity: int = 0, min_err_severity: int = ErrSeverity.INFO, enable_debug_msg: bool = False) -> None:
+        self.verbosity = verbosity
+        self.min_err_severity = min_err_severity
+        self.debug_msg_enabled = enable_debug_msg
+
+    def set_printers(
+            self, msg_printer: Callable[[str, bool, str], None] | None = None,
+            err_printer: Callable[[str, ErrSeverity, str], None] | None = None) -> None:
+        self.__msg_printer = msg_printer if msg_printer else self.default_msg_printer
+        self.__err_printer = err_printer if err_printer else self.default_err_printer
+
+    def dbg(self, text: str, end: str = "\n") -> None:
+        if self.debug_msg_enabled:
+            self.__msg_printer(text, True, end)
+
+    def msg(self, text: str, msg_verbosity: int = 1, max_msg_verbosity: int = 0, end: str = "\n") -> None:
+        max_verbosity = max(max_msg_verbosity, msg_verbosity) if max_msg_verbosity > 0 else self.verbosity
+        if msg_verbosity <= self.verbosity <= max_verbosity:
+            self.__msg_printer(text, False, end)
+
+    def err(self, text: str, severity: ErrSeverity = ErrSeverity.WARNING, end: str = "\n") -> None:
+        if self.min_err_severity <= severity:
+            self.__err_printer(text, severity, end)
+
+    @staticmethod
+    def default_msg_printer(text: str, debug_msg: bool, end: str) -> None:
+        if debug_msg:
+            text = f"DEBUG: {text}"
+        print(text, file=sys.stdout, end=end)
+
+    @staticmethod
+    def default_err_printer(text: str, severity: ErrSeverity, end: str) -> None:
+        severity_text = {0: "INFO", 1: "WARNING", 2: "CRITICAL", 3: "SEVERE"}
+        sev = severity_text.get(severity, "UNDEFINED")
+        print(f"ERROR ({sev}): {text}", file=sys.stderr, end=end)
+
+
+class PreprocLogger(Logger):
+    def __init__(self, verbosity: int = 0, min_err_severity: int = Logger.ErrSeverity.INFO, enable_debug_msg: bool = False) -> None:
+        super().__init__(verbosity, min_err_severity, enable_debug_msg)
+        self.proc_file_name: str = ""
+        self.prof_file_line: int = 0
+        self.set_printers(self.msg_printer, self.err_printer)
+
+    def msg_printer(self, text: str, debug_msg: bool, end: str) -> None:
+        text = self.__fill_location_tag(text)
+        self.default_msg_printer(text, debug_msg, end)
+
+    def err_printer(self, text: str, severity: Logger.ErrSeverity, end: str) -> None:
+        text = self.__fill_location_tag(text)
+        self.default_err_printer(text, severity, end)
+
+    def __fill_location_tag(self, text: str) -> str:
+        if self.proc_file_name:
+            loc = f"Processed file: {self.proc_file_name}, start line: {self.prof_file_line}"
+        else:
+            loc = f"Processed start line: {self.prof_file_line}"
+        text.replace("%l", loc)
+        return text
+
+
+log = PreprocLogger()
+
+
 class CodeFormatter():
     RE_PTRN_MLINE_CMNT = re.compile(r"/\*.*?\*/", re.ASCII + re.DOTALL)
-    RE_PTRN_SLINE_CMNT = re.compile(r"//[^\n]*", re.ASCII)
+    RE_PTRN_SLINE_CMNT = re.compile(r"[ \t]*//[^\n]*", re.ASCII)
     RE_PTRN_LINE_CONT = re.compile(r"[ \t]*\\[ \t]*\n", re.ASCII)
     RE_PTRN_NUM_CONST = re.compile(r"(?P<num>\d[\d.]*\d*)(?:[uUlLfF]+)", re.ASCII)
 
@@ -115,17 +194,15 @@ class FileIO():
     def add_include_dir(self, *dir_paths: str) -> None:
         for dir_path in dir_paths:
             incl_dir_path = Path(dir_path).resolve()
-
             if incl_dir_path.is_file():
                 incl_dir_path = incl_dir_path.parent()
-
             if incl_dir_path.is_dir():
                 if incl_dir_path not in self.incl_dir_paths:
                     self.incl_dir_paths.append(incl_dir_path)
             else:
-                print(f"ERROR: Include dir path '{dir_path}' not found.")
+                log.err(f"Include dir '{dir_path}' not found.")
 
-    def read_include_file(self, file_path: str) -> str:
+    def read_file(self, file_path: str) -> str:
         for incl_dir_path in self.incl_dir_paths:
             incl_file_path = Path(incl_dir_path, Path(file_path))
             if incl_file_path.is_file():
@@ -133,9 +210,8 @@ class FileIO():
                     file_code = file.read()
                 break
         else:
-            print(f"ERROR: Include file path '{file_path}' not found.")
+            log.err(f"File '{file_path}' not found.")
             file_code = ""
-
         return file_code
 
 
@@ -184,7 +260,7 @@ class ConditionManager():
         if self.branch_depth > 0:
             self.branch_state = self.branch_state_stack.pop()
         else:
-            print("ERROR: Unexpected #endif detected.")
+            log.err("Unexpected #endif detected (%l).", log.ErrSeverity.CRITICAL)
 
 
 class CodeType(IntEnum):
@@ -195,7 +271,7 @@ class CodeType(IntEnum):
 
 
 class PreprocInput():
-    def get_next_code_part(self, code: str) -> Generator[tuple[CodeType, str], None, None]:
+    def yield_code_parts(self, code: str) -> Generator[tuple[CodeType, str], None, None]:
         in_lines = code.splitlines()
         line_idx = 0
         code_lines_num = len(in_lines)
@@ -203,6 +279,7 @@ class PreprocInput():
             out_lines = []
             in_line = in_lines[line_idx].rstrip()
             out_lines.append(in_line)
+            log.prof_file_line = line_idx
             line_idx += 1
             # Detect and extract continuous line split to lines ending with "\".
             if in_line.endswith("\\"):
@@ -221,7 +298,7 @@ class PreprocInput():
                     if "*/" in in_line:
                         break
                 else:
-                    print("ERROR: Unterminated comment detected.")
+                    log.err("Unterminated comment detected (%l).", log.ErrSeverity.CRITICAL)
             # Detect and extract multiple empty lines.
             elif not in_line:
                 while line_idx < code_lines_num and not in_lines[line_idx].strip():
@@ -379,20 +456,21 @@ class CPreprocessor():
         self.__file_io.add_include_dir(*dir_paths)
 
     def process_file(self, file_path: str, global_output: bool = True, full_local_output: bool = False) -> str:
-        file_code = self.__file_io.read_include_file(file_path)
+        file_code = self.__file_io.read_file(file_path)
         local_output_code = ""
         if file_code:
-            local_output_code = self.process_code(file_code, global_output, full_local_output)
+            local_output_code = self.process_code(file_code, global_output, full_local_output, str(Path(file_path).name))
         return local_output_code
 
-    def process_code(self, code: str, global_output: bool = True, full_local_output: bool = False) -> str:
+    def process_code(self, code: str, global_output: bool = True, full_local_output: bool = False, proc_file_name: str = "") -> str:
+        log.proc_file_name = proc_file_name
         original_branch_depth = self.__cond_mngr.branch_depth
         # General code processing.
         code = CodeFormatter.replace_tabs(code)
         # Extraction and processing of directives, comments, whitespaces and other code parts.
         input = PreprocInput()
         local_output = PreprocOutput()
-        for (code_type, code_part) in input.get_next_code_part(code):
+        for (code_type, code_part) in input.yield_code_parts(code):
             if code_type == CodeType.DIRECTIVE:
                 self.__process_directives(code_part)
             else:
@@ -403,7 +481,7 @@ class CPreprocessor():
                 self.__output.add_code_part(code_part, code_type)
             local_output.add_code_part(code_part, code_type)
         if self.__cond_mngr.branch_depth != original_branch_depth:
-            print("ERROR: Unexpected #if detected.")
+            log.err("Unterminated #if detected (%l).", log.ErrSeverity.CRITICAL)
         return local_output.code_all if full_local_output else local_output.code
 
     def evaluate(self, expr_code: str) -> any:
@@ -430,7 +508,7 @@ class CPreprocessor():
         if exp_depth == 0:
             exp_code = CodeFormatter.remove_line_escapes(exp_code)
         if exp_depth > 4096:
-            print("ERROR: Macro expansion depth limit 4096 exceeded.")
+            log.err("Macro expansion depth limit 4096 exceeded (%l).", log.ErrSeverity.SEVERE)
             return exp_code
 
         for (macro_id, macro) in self.macros.items():
@@ -445,7 +523,8 @@ class CPreprocessor():
                         macro_end_pos = args_end_pos + 1
                         arg_vals = self.__extract_macro_ref_args(exp_code[args_start_pos + 1: args_end_pos])
                     if len(arg_vals) < len(macro.args):
-                        print(f"ERROR: {macro_id} macro reference is missing some of its {len(macro.args)} arguments.")
+                        log.err(f"{macro_id} macro reference is missing some of its {len(macro.args)} arguments (%l).",
+                                log.ErrSeverity.CRITICAL)
                     # Create a list of fully expanded macro arguments.
                     fully_exp_arg_vals = []
                     for arg_val in arg_vals:
@@ -502,9 +581,9 @@ class CPreprocessor():
                     body = body.lstrip()
                 self.macros[ident] = Macro(ident, args_list, body)
             else:
-                print(f"ERROR: Macro body not detected:\n{code}")
+                log.err(f"Macro body not detected (%l):\n{code}", log.ErrSeverity.CRITICAL)
         else:
-            print(f"ERROR: #define with an unexpected formatting detected:\n{code}")
+            log.err(f"#define with an unexpected formatting detected (%l):\n{code}", log.ErrSeverity.CRITICAL)
 
     def __process_undef(self, parts: dict[str, str | None], code: str) -> None:
         if parts["ident"] is not None and parts["ident"] in self.macros:
@@ -594,18 +673,18 @@ CLI_DESC = "C preprocessor preserving the formatting and comments in the process
 DEBUG_ARGS_LIST = None
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=CLI_DESC)
-    parser.add_argument("in_out_file_pairs", metavar="in_out_files", type=Path, nargs="+",
-                        help="Pairs of input files and generated output files.")
-    parser.add_argument("-i", "--incl_dirs", metavar="include_directories", type=Path, nargs="+",
-                        help="Directories to search for included files.")
-    parser.add_argument("-p", "--proc_files", metavar="process_files", type=Path, nargs="+",
-                        help="Additional files to be processed first without generating an output file.")
-    parser.add_argument("-f", "--full_output", action="store_true",
-                        help="Include all code in the output file, including processed directives, all comments and whitespaces.")
+def run_cli() -> None:
+    argparser = argparse.ArgumentParser(description=CLI_DESC)
+    argparser.add_argument("in_out_file_pairs", metavar="in_out_files", type=Path, nargs="+",
+                           help="Pairs of input files and generated output files.")
+    argparser.add_argument("-i", "--incl_dirs", metavar="include_directories", type=Path, nargs="+",
+                           help="Directories to search for included files.")
+    argparser.add_argument("-p", "--proc_files", metavar="process_files", type=Path, nargs="+",
+                           help="Additional files to be processed first without generating an output file.")
+    argparser.add_argument("-f", "--full_output", action="store_true",
+                           help="Include all code in the output file, including processed directives, all comments and whitespaces.")
 
-    args = parser.parse_args(DEBUG_ARGS_LIST)
+    args = argparser.parse_args(DEBUG_ARGS_LIST)
 
     if len(args.in_out_file_pairs) & 1 == 0:
         cpreproc = CPreprocessor()
@@ -619,8 +698,8 @@ def main() -> None:
             cpreproc.save_output_to_file(str(args.in_out_file_pairs[idx + 1]), args.full_output)
             cpreproc.reset_output()
     else:
-        parser.error("number of input and output file paths specified by the 'in_out_file_pairs' argument must be even")
+        argparser.error("number of input and output file paths specified by the 'in_out_file_pairs' argument must be even")
 
 
 if __name__ == "__main__":
-    main()
+    run_cli()
