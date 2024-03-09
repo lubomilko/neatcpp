@@ -66,7 +66,7 @@ class PreprocLogger(Logger):
     def __init__(self, verbosity: int = 0, min_err_severity: int = Logger.ErrSeverity.INFO, enable_debug_msg: bool = False) -> None:
         super().__init__(verbosity, min_err_severity, enable_debug_msg)
         self.proc_file_name: str = ""
-        self.prof_file_line: int = 0
+        self.proc_file_line: int = 0
         self.set_printers(self.msg_printer, self.err_printer)
 
     def msg_printer(self, text: str, debug_msg: bool, end: str) -> None:
@@ -79,11 +79,10 @@ class PreprocLogger(Logger):
 
     def __fill_location_tag(self, text: str) -> str:
         if self.proc_file_name:
-            loc = f"Processed file: {self.proc_file_name}, start line: {self.prof_file_line}"
+            loc = f"Processed file: {self.proc_file_name}, start line: {self.proc_file_line + 1}"
         else:
-            loc = f"Processed start line: {self.prof_file_line}"
-        text.replace("%l", loc)
-        return text
+            loc = f"Processed start line: {self.proc_file_line + 1}"
+        return text.replace("%l", loc)
 
 
 log = PreprocLogger()
@@ -279,7 +278,7 @@ class PreprocInput():
             out_lines = []
             in_line = in_lines[line_idx].rstrip()
             out_lines.append(in_line)
-            log.prof_file_line = line_idx
+            log.proc_file_line = line_idx
             line_idx += 1
             # Detect and extract continuous line split to lines ending with "\".
             if in_line.endswith("\\"):
@@ -464,7 +463,7 @@ class CPreprocessor():
 
     def process_code(self, code: str, global_output: bool = True, full_local_output: bool = False, proc_file_name: str = "") -> str:
         log.proc_file_name = proc_file_name
-        original_branch_depth = self.__cond_mngr.branch_depth
+        orig_branch_depth = self.__cond_mngr.branch_depth
         # General code processing.
         code = CodeFormatter.replace_tabs(code)
         # Extraction and processing of directives, comments, whitespaces and other code parts.
@@ -480,8 +479,8 @@ class CPreprocessor():
             if global_output:
                 self.__output.add_code_part(code_part, code_type)
             local_output.add_code_part(code_part, code_type)
-        if self.__cond_mngr.branch_depth != original_branch_depth:
-            log.err("Unterminated #if detected (%l).", log.ErrSeverity.CRITICAL)
+        if self.__cond_mngr.branch_depth != orig_branch_depth:
+            log.err("Unterminated #if detected in a previous code (%l).", log.ErrSeverity.CRITICAL)
         return local_output.code_all if full_local_output else local_output.code
 
     def evaluate(self, expr_code: str) -> any:
@@ -559,7 +558,9 @@ class CPreprocessor():
 
     def __process_include(self, parts: dict[str, str | None], code: str) -> None:
         if parts["file"] is not None:
+            orig_log_file_name = log.proc_file_name
             self.process_file(parts["file"], False)
+            log.proc_file_name = orig_log_file_name
 
     def __process_define(self, parts: dict[str, str | None], code: str) -> None:
         if parts["ident"] is not None:
