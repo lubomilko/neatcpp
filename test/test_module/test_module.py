@@ -36,9 +36,10 @@ def test_process_file(in_file: Path, exp_out_file: Path, incl_dirs: tuple[Path])
     cpp.process_file(f"{in_file}")
     proc_output = cpp.output
 
-    # Save processed output into *_out file for debugging purposes.
-    with open(Path(in_file.parent, f"{in_file.stem}_out.{in_file.suffix}"), "w", encoding="utf-8") as file:
-        file.write(proc_output)
+    # Remove existing output file and save fresh processed output into *_out file for debugging purposes.
+    out_file_path = Path(in_file.parent, f"{in_file.stem}_out.{in_file.suffix}")
+    out_file_path.unlink()
+    cpp.save_output_to_file(str(out_file_path))
 
     # Read file containing the expected processed output.
     exp_output = ""
