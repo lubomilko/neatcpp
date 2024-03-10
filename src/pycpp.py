@@ -40,7 +40,7 @@ __summary__ = "C preprocessor in Python preserving the original C code formattin
 __all__ = ["PyCpp"]
 
 
-CLI_DESCRIPTION = f"{__module_name__} {__version__}\n{__summary__}"
+CLI_DESCRIPTION = f"{__module_name__} {__version__}\n{(len(__module_name__) + len(__module_name__) + 1) * '-'}\n{__summary__}"
 CLI_EPILOG = __copyright__
 CLI_DEBUG_ARGS = None
 
@@ -117,6 +117,12 @@ class PreprocLogger(Logger):
         else:
             loc = f"Processed start line: {self.proc_file_line + 1}"
         return text.replace("%l", loc)
+
+    def get_code_sample(self, code: str, sample_len: int = 80) -> str:
+        sample = f"{code.replace("\n", "").lstrip()[:sample_len]}"
+        if len(code) > sample_len:
+            sample = f"{sample} ..."
+        return sample
 
 
 log = PreprocLogger()
@@ -505,7 +511,7 @@ class PyCpp():
         if proc_file_name:
             log.msg(f"Processing file '{Path(proc_file_name).name}'.")
         else:
-            log.msg(f"Processing source code '{code.lstrip()[80:]}'.")
+            log.msg(f"Processing source code '{log.get_code_sample(code)}'.")
         log.proc_file_name = proc_file_name
         orig_branch_depth = self.__cond_mngr.branch_depth
         # General code processing.
@@ -515,6 +521,7 @@ class PyCpp():
         local_output = PreprocOutput()
         for (code_type, code_part) in code_input.yield_code_parts(code):
             if code_type == CodeType.DIRECTIVE:
+                log.msg(f"    Processing directive '{log.get_code_sample(code_part)}'.", 2)
                 self.__process_directives(code_part)
             else:
                 if self.__cond_mngr.branch_active:
@@ -559,7 +566,7 @@ class PyCpp():
             macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, macro.args)
             while macro_start_pos >= 0 and (not CodeFormatter.is_in_comment(exp_code, macro_start_pos) and
                                             not CodeFormatter.is_in_string(exp_code, macro_start_pos)):
-                log.msg(f"Expanding macro '{macro_id}'.", 2)
+                log.msg(f"    {exp_depth * '    '}Expanding macro '{macro_id}'.", 2)
                 macro_end_pos = macro_start_pos + len(macro_id)
                 if macro.args:
                     arg_vals = []
@@ -591,14 +598,12 @@ class PyCpp():
         # Process conditional directives to correctly update the brach state stack and
         # detect elif/else for SEARCH branch state.
         for directive in self.__directives[DirectiveGroup.CONDITIONAL]:
-            log.msg(f"Processing directive '{code.lstrip()[80:]}...'.", 2)
             processed = directive.process(code)
             if processed:
                 break
         if not processed and self.__cond_mngr.branch_active:
             # Process non-conditional directives in the active conditional branch.
             for directive in self.__directives[DirectiveGroup.STANDARD]:
-                log.msg(f"Processing directive '{code.lstrip()[80:]}...'.", 2)
                 processed = directive.process(code)
                 if processed:
                     break
@@ -722,13 +727,13 @@ def run_console_app() -> None:
     argparser = argparse.ArgumentParser(description=CLI_DESCRIPTION, epilog=CLI_EPILOG,
                                         formatter_class=argparse.RawDescriptionHelpFormatter)
     argparser.add_argument("in_out_file_pairs", metavar="in_out_files", type=Path, nargs="+",
-                           help="pairs of input files and generated output files.")
+                           help="in_file_1 out_file_1 [in_file_2 out_file_2 ...]\npairs of input C source and generated output files")
     argparser.add_argument("-i", "--incl_dirs", metavar="include_directories", type=Path, nargs="+",
-                           help="directories to search for included files.")
+                           help="directories to search for included files")
     argparser.add_argument("-p", "--proc_files", metavar="process_files", type=Path, nargs="+",
-                           help="additional files to be processed first without generating an output file.")
+                           help="additional files to be processed first without generating an output file")
     argparser.add_argument("-f", "--full_output", action="store_true",
-                           help="include all code in the output file, including processed directives, all comments and whitespaces.")
+                           help="include directives, all comments and whitespaces in the preprocessor output")
     argparser.add_argument("-v", "--verbosity", metavar="verbosity_level", type=int, choices=range(3), default=0,
                            help="set log messages verbosity level 0-2 (0 = log OFF), does not affect error and violation messages")
     argparser.add_argument("-V", "--version", action="version", version=f"{__module_name__} {__version__}")
