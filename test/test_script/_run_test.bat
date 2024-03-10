@@ -7,7 +7,7 @@ python ../../src/pycpp.py ^
 comp_interpolation/static_analysis/interpolation_def_in.h comp_interpolation/static_analysis/interpolation_def.h ^
 comp_interpolation/static_analysis/interpolation_def_in.c comp_interpolation/static_analysis/interpolation_def.c ^
 -i comp_interpolation/dep comp_interpolation/dep/comp_util_type comp_interpolation/dep/src_common comp_interpolation/src ^
--f
+-f -v2
 
 :: Switch back to the original current working directory.
 @popd
