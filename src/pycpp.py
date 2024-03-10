@@ -23,24 +23,24 @@ import re
 import sys
 import argparse
 from enum import IntEnum
-from typing import Generator
+from typing import Callable, Generator
 from textwrap import dedent
-from typing import Callable
 from pathlib import Path
 
+# pylint: unused-argument
 
 __author__ = "Lubomir Milko"
 __copyright__ = "Copyright (C) 2024 Lubomir Milko"
-__name__ = "pycpp"
+__module_name__ = "pycpp"
 __version__ = "1.0.0"
 __license__ = "GPLv3"
 __summary__ = "C preprocessor in Python preserving the original C code formatting."
 
 
-__all__ = ["CPreprocessor"]
+__all__ = ["PyCpp"]
 
 
-CLI_DESCRIPTION = f"{__name__} {__version__}\n{__summary__}"
+CLI_DESCRIPTION = f"{__module_name__} {__version__}\n{__summary__}"
 CLI_EPILOG = __copyright__
 CLI_DEBUG_ARGS = None
 
@@ -229,7 +229,7 @@ class FileIO():
             log.msg(f"Adding include directory '{Path(dir_path).name}'.")
             incl_dir_path = Path(dir_path).resolve()
             if incl_dir_path.is_file():
-                incl_dir_path = incl_dir_path.parent()
+                incl_dir_path = incl_dir_path.parent
             if incl_dir_path.is_dir():
                 if incl_dir_path not in self.incl_dir_paths:
                     self.incl_dir_paths.append(incl_dir_path)
@@ -408,42 +408,43 @@ class Directive():
 
 
 class Macro():
-    def __init__(self, identifier: str = "", args: list[str] = [], body: str = "") -> None:
+    def __init__(self, identifier: str = "", args: list[str] = None, body: str = "") -> None:
         self.identifier: str = identifier
-        self.args: list[str] = args
+        self.args: list[str] = args if args is not None else []
         self.body: str = body
 
-    def expand_args(self, arg_vals: list[str] = [], fully_exp_arg_vals: list[str] = []) -> str:
+    def expand_args(self, arg_vals: list[str] = None, fully_exp_arg_vals: list[str] = None) -> str:
         exp_code = self.body
-        for (arg_idx, arg_name) in enumerate(self.args):
-            # Handle variadic arguments.
-            if arg_name == "...":
-                arg_name = "__VA_ARGS__"
-                arg_val = ""
-                fully_exp_arg_val = ""
-                for arg_val_idx in range(arg_idx, len(arg_vals)):
-                    arg_val = f"{arg_val}{arg_vals[arg_val_idx]}, "
-                    fully_exp_arg_val = f"{fully_exp_arg_val}{fully_exp_arg_vals[arg_val_idx]}, "
-                arg_val = arg_val[:-2]  # Remove the last two characters, i.e. ", " that is used for argument separation.
-                fully_exp_arg_val = fully_exp_arg_val[:-2]
-            else:
-                # If argument value is specified, then use it. Otherwise use empty string (not enough parameters given in macro reference).
-                arg_val = arg_vals[arg_idx] if arg_idx < len(arg_vals) else ""
-                fully_exp_arg_val = fully_exp_arg_vals[arg_idx] if arg_idx < len(fully_exp_arg_vals) else ""
-            # Perform concatenatenation of macro arguments specified by the ## operator.
-            exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
-            exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
-            # Perform stringification specified by the # operator.
-            exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", rf'\g<1>"{arg_val}"\g<2>', exp_code, 0, re.ASCII + re.MULTILINE)
-            # Replace the macro argument in macro body with the fully expanded argument value.
-            exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{fully_exp_arg_val}\g<2>", exp_code, 0, re.ASCII + re.MULTILINE)
+        if arg_vals is not None and fully_exp_arg_vals is not None:
+            for (arg_idx, arg_name) in enumerate(self.args):
+                # Handle variadic arguments.
+                if arg_name == "...":
+                    arg_name = "__VA_ARGS__"
+                    arg_val = ""
+                    fully_exp_arg_val = ""
+                    for arg_val_idx in range(arg_idx, len(arg_vals)):
+                        arg_val = f"{arg_val}{arg_vals[arg_val_idx]}, "
+                        fully_exp_arg_val = f"{fully_exp_arg_val}{fully_exp_arg_vals[arg_val_idx]}, "
+                    arg_val = arg_val[:-2]  # Remove the last two characters, i.e. ", " that is used for argument separation.
+                    fully_exp_arg_val = fully_exp_arg_val[:-2]
+                else:
+                    # If argument value is specified, then use it. Otherwise use empty string (not enough parameters in a macro reference).
+                    arg_val = arg_vals[arg_idx] if arg_idx < len(arg_vals) else ""
+                    fully_exp_arg_val = fully_exp_arg_vals[arg_idx] if arg_idx < len(fully_exp_arg_vals) else ""
+                # Perform concatenatenation of macro arguments specified by the ## operator.
+                exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
+                exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
+                # Perform stringification specified by the # operator.
+                exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", rf'\g<1>"{arg_val}"\g<2>', exp_code, 0, re.ASCII + re.MULTILINE)
+                # Replace the macro argument in macro body with the fully expanded argument value.
+                exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{fully_exp_arg_val}\g<2>", exp_code, 0, re.ASCII + re.MULTILINE)
         # Perform remaining concatenatenations specified by the ## operator by removing the operator and its surrounding spaces.
         exp_code = re.sub(r"[\s\\]*##[\s\\]*", "", exp_code, 0, re.ASCII + re.MULTILINE)
         # Perform an lstrip in case some of the expanded arguments are empty and generate a whitespace at the beginning of the macro body.
         return exp_code.lstrip()
 
 
-class CPreprocessor():
+class PyCpp():
     def __init__(self) -> None:
         self.__file_io: FileIO = FileIO()
         self.__output: PreprocOutput = PreprocOutput()
@@ -510,9 +511,9 @@ class CPreprocessor():
         # General code processing.
         code = CodeFormatter.replace_tabs(code)
         # Extraction and processing of directives, comments, whitespaces and other code parts.
-        input = PreprocInput()
+        code_input = PreprocInput()
         local_output = PreprocOutput()
-        for (code_type, code_part) in input.yield_code_parts(code):
+        for (code_type, code_part) in code_input.yield_code_parts(code):
             if code_type == CodeType.DIRECTIVE:
                 self.__process_directives(code_part)
             else:
@@ -532,8 +533,9 @@ class CPreprocessor():
         expr_code = expr_code.replace("&&", " and ").replace("||", " or ").replace("/", "//")
         re.sub(r"!([^?==])", r" not \1", expr_code)
         try:
-            # TODO: Make eval more safe by restricting certain commands or whole imports.
-            output = eval(expr_code)
+            # Make eval a little bit safer by removing the import keyword.
+            expr_code = expr_code.replace("import", "")
+            output = eval(expr_code)    # pylint: disable = eval-used
         except (SyntaxError, NameError, TypeError, ZeroDivisionError):
             output = False
         return output
@@ -541,7 +543,7 @@ class CPreprocessor():
     def is_true(self, expr_code: str) -> bool:
         expr_code = self.__preproc_eval_expr(expr_code)
         state = self.evaluate(expr_code)
-        if type(state) is str:
+        if isinstance(state, str):
             return False
         return bool(state)
 
@@ -729,22 +731,22 @@ def run_console_app() -> None:
                            help="include all code in the output file, including processed directives, all comments and whitespaces.")
     argparser.add_argument("-v", "--verbosity", metavar="verbosity_level", type=int, choices=range(3), default=0,
                            help="set log messages verbosity level 0-2 (0 = log OFF), does not affect error and violation messages")
-    argparser.add_argument("-V", "--version", action="version", version=f"{__name__} {__version__}")
+    argparser.add_argument("-V", "--version", action="version", version=f"{__module_name__} {__version__}")
 
     args = argparser.parse_args(CLI_DEBUG_ARGS)
 
     if len(args.in_out_file_pairs) & 1 == 0:
         log.config(args.verbosity)
-        cpreproc = CPreprocessor()
+        pycpp = PyCpp()
         if args.incl_dirs is not None:
-            cpreproc.add_include_dirs(*args.incl_dirs)
+            pycpp.add_include_dirs(*args.incl_dirs)
         if args.proc_files is not None:
             for file in args.proc_files:
-                cpreproc.process_file(str(file), False, False)
+                pycpp.process_file(str(file), False, False)
         for idx in range(0, len(args.in_out_file_pairs), 2):
-            cpreproc.process_file(str(args.in_out_file_pairs[idx]))
-            cpreproc.save_output_to_file(str(args.in_out_file_pairs[idx + 1]), args.full_output)
-            cpreproc.reset_output()
+            pycpp.process_file(str(args.in_out_file_pairs[idx]))
+            pycpp.save_output_to_file(str(args.in_out_file_pairs[idx + 1]), args.full_output)
+            pycpp.reset_output()
     else:
         argparser.error("number of input and output file paths specified by the 'in_out_file_pairs' argument must be even")
 

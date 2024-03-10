@@ -1,2 +1,2 @@
 # pycpp
-Python C preprocessor with some custom features.
+C preprocessor in Python preserving the original C code formatting.

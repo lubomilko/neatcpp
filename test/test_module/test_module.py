@@ -1,13 +1,14 @@
-import pytest
-import sys
 from pathlib import Path
+import sys
+import pytest
+
 
 CURR_DIR_PATH = Path(__file__).parent
 
-sys.path.append(str(Path(CURR_DIR_PATH, "../..").resolve()))
+sys.path.append(str(Path(CURR_DIR_PATH, "../../src").resolve()))
 
 
-from cpreproc import CPreprocessor
+from pycpp import PyCpp     # noqa: E402
 
 
 TEST_PROCESS_FILE_PARAMS = [
@@ -30,7 +31,7 @@ TEST_PROCESS_FILE_PARAMS = [
 
 @pytest.mark.parametrize("in_file, exp_out_file, incl_dirs", TEST_PROCESS_FILE_PARAMS)
 def test_process_file(in_file: Path, exp_out_file: Path, incl_dirs: tuple[Path]) -> None:
-    cpp = CPreprocessor()
+    cpp = PyCpp()
     if incl_dirs:
         cpp.add_include_dirs(*incl_dirs)
     cpp.process_file(f"{in_file}")
@@ -46,5 +47,5 @@ def test_process_file(in_file: Path, exp_out_file: Path, incl_dirs: tuple[Path])
     with open(exp_out_file, "r", encoding="utf-8") as file:
         exp_output = file.read()
 
-    # Assert that the processed output is going to be the same as the expected output.
+    # Assert that the processed output is the same as the expected output.
     assert proc_output == exp_output

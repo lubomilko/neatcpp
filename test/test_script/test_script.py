@@ -3,13 +3,13 @@ from pathlib import Path
 
 CURR_DIR_PATH = Path(__file__).parent
 
-sys.path.append(str(Path(CURR_DIR_PATH, "../..").resolve()))
+sys.path.append(str(Path(CURR_DIR_PATH, "../../src").resolve()))
 
-from cpreproc import CPreprocessor
+from pycpp import PyCpp     # noqa: E402
 
 
 def main() -> None:
-    cpp = CPreprocessor()
+    cpp = PyCpp()
     cpp.add_include_dirs(
         str(Path(CURR_DIR_PATH, "comp_interpolation", "dep")),
         str(Path(CURR_DIR_PATH, "comp_interpolation", "dep", "comp_util_type")),
