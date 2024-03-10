@@ -1,3 +1,24 @@
+"""
+pycpp - C preprocessor in Python preserving the original C code formatting.
+
+Copyright (C) 2024 Lubomir Milko
+This file is part of pycpp <https://github.com/lubomilko/pycpp>.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+
 import re
 import sys
 import argparse
@@ -8,7 +29,20 @@ from typing import Callable
 from pathlib import Path
 
 
+__author__ = "Lubomir Milko"
+__copyright__ = "Copyright (C) 2024 Lubomir Milko"
+__name__ = "pycpp"
+__version__ = "1.0.0"
+__license__ = "GPLv3"
+__summary__ = "C preprocessor in Python preserving the original C code formatting."
+
+
 __all__ = ["CPreprocessor"]
+
+
+CLI_DESCRIPTION = f"{__name__} {__version__}\n{__summary__}"
+CLI_EPILOG = __copyright__
+CLI_DEBUG_ARGS = None
 
 
 class Logger():
@@ -192,6 +226,7 @@ class FileIO():
 
     def add_include_dir(self, *dir_paths: str) -> None:
         for dir_path in dir_paths:
+            log.msg(f"Adding include directory '{Path(dir_path).name}'.")
             incl_dir_path = Path(dir_path).resolve()
             if incl_dir_path.is_file():
                 incl_dir_path = incl_dir_path.parent()
@@ -437,6 +472,9 @@ class CPreprocessor():
     def output_full(self) -> str:
         return self.__output.code_all
 
+    def log_config(self, verbosity: int = 0, min_err_severity: int = log.ErrSeverity.INFO, enable_debug_msg: bool = False) -> None:
+        log.config(verbosity, min_err_severity, enable_debug_msg)
+
     def reset(self) -> None:
         self.__file_io.reset()
         self.__output.reset()
@@ -448,6 +486,7 @@ class CPreprocessor():
 
     def save_output_to_file(self, file_path: str, full_output: bool = False) -> None:
         with open(file_path, "w", encoding="utf-8") as file:
+            log.msg(f"Saving processed output to file '{Path(file_path).name}'.")
             output = self.output_full if full_output else self.output
             file.write(output)
 
@@ -462,6 +501,10 @@ class CPreprocessor():
         return local_output_code
 
     def process_code(self, code: str, global_output: bool = True, full_local_output: bool = False, proc_file_name: str = "") -> str:
+        if proc_file_name:
+            log.msg(f"Processing file '{Path(proc_file_name).name}'.")
+        else:
+            log.msg(f"Processing source code '{code.lstrip()[80:]}'.")
         log.proc_file_name = proc_file_name
         orig_branch_depth = self.__cond_mngr.branch_depth
         # General code processing.
@@ -506,14 +549,15 @@ class CPreprocessor():
         exp_code = code
         if exp_depth == 0:
             exp_code = CodeFormatter.remove_line_escapes(exp_code)
-        if exp_depth > 4096:
-            log.err("Macro expansion depth limit 4096 exceeded (%l).", log.ErrSeverity.SEVERE)
+        if exp_depth > 512:
+            log.err("Macro expansion depth limit 512 exceeded (%l).", log.ErrSeverity.SEVERE)
             return exp_code
 
         for (macro_id, macro) in self.macros.items():
             macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, macro.args)
             while macro_start_pos >= 0 and (not CodeFormatter.is_in_comment(exp_code, macro_start_pos) and
                                             not CodeFormatter.is_in_string(exp_code, macro_start_pos)):
+                log.msg(f"Expanding macro '{macro_id}'.", 2)
                 macro_end_pos = macro_start_pos + len(macro_id)
                 if macro.args:
                     arg_vals = []
@@ -545,12 +589,14 @@ class CPreprocessor():
         # Process conditional directives to correctly update the brach state stack and
         # detect elif/else for SEARCH branch state.
         for directive in self.__directives[DirectiveGroup.CONDITIONAL]:
+            log.msg(f"Processing directive '{code.lstrip()[80:]}...'.", 2)
             processed = directive.process(code)
             if processed:
                 break
         if not processed and self.__cond_mngr.branch_active:
             # Process non-conditional directives in the active conditional branch.
             for directive in self.__directives[DirectiveGroup.STANDARD]:
+                log.msg(f"Processing directive '{code.lstrip()[80:]}...'.", 2)
                 processed = directive.process(code)
                 if processed:
                     break
@@ -670,24 +716,25 @@ class CPreprocessor():
         return out_code
 
 
-CLI_DESC = "C preprocessor preserving the formatting and comments in the processed code."
-DEBUG_ARGS_LIST = None
-
-
-def run_cli() -> None:
-    argparser = argparse.ArgumentParser(description=CLI_DESC)
+def run_console_app() -> None:
+    argparser = argparse.ArgumentParser(description=CLI_DESCRIPTION, epilog=CLI_EPILOG,
+                                        formatter_class=argparse.RawDescriptionHelpFormatter)
     argparser.add_argument("in_out_file_pairs", metavar="in_out_files", type=Path, nargs="+",
-                           help="Pairs of input files and generated output files.")
+                           help="pairs of input files and generated output files.")
     argparser.add_argument("-i", "--incl_dirs", metavar="include_directories", type=Path, nargs="+",
-                           help="Directories to search for included files.")
+                           help="directories to search for included files.")
     argparser.add_argument("-p", "--proc_files", metavar="process_files", type=Path, nargs="+",
-                           help="Additional files to be processed first without generating an output file.")
+                           help="additional files to be processed first without generating an output file.")
     argparser.add_argument("-f", "--full_output", action="store_true",
-                           help="Include all code in the output file, including processed directives, all comments and whitespaces.")
+                           help="include all code in the output file, including processed directives, all comments and whitespaces.")
+    argparser.add_argument("-v", "--verbosity", metavar="verbosity_level", type=int, choices=range(3), default=0,
+                           help="set log messages verbosity level 0-2 (0 = log OFF), does not affect error and violation messages")
+    argparser.add_argument("-V", "--version", action="version", version=f"{__name__} {__version__}")
 
-    args = argparser.parse_args(DEBUG_ARGS_LIST)
+    args = argparser.parse_args(CLI_DEBUG_ARGS)
 
     if len(args.in_out_file_pairs) & 1 == 0:
+        log.config(args.verbosity)
         cpreproc = CPreprocessor()
         if args.incl_dirs is not None:
             cpreproc.add_include_dirs(*args.incl_dirs)
@@ -703,4 +750,4 @@ def run_cli() -> None:
 
 
 if __name__ == "__main__":
-    run_cli()
+    run_console_app()
