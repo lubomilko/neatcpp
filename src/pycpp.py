@@ -438,13 +438,13 @@ class Macro():
                     arg_val = arg_vals[arg_idx] if arg_idx < len(arg_vals) else ""
                     fully_exp_arg_val = fully_exp_arg_vals[arg_idx] if arg_idx < len(fully_exp_arg_vals) else ""
                 # Perform concatenatenation of macro arguments specified by the ## operator.
-                exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
-                exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
+                exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"##{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
+                exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}##", exp_code, 0, re.ASCII + re.MULTILINE)
                 # Perform stringification specified by the # operator.
                 exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", rf'\g<1>"{arg_val}"\g<2>', exp_code, 0, re.ASCII + re.MULTILINE)
                 # Replace the macro argument in macro body with the fully expanded argument value.
                 exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{fully_exp_arg_val}\g<2>", exp_code, 0, re.ASCII + re.MULTILINE)
-        # Perform remaining concatenatenations specified by the ## operator by removing the operator and its surrounding spaces.
+        # Perform concatenatenations specified by the ## operator by removing the operator and its surrounding spaces.
         exp_code = re.sub(r"[\s\\]*##[\s\\]*", "", exp_code, 0, re.ASCII + re.MULTILINE)
         # Perform an lstrip in case some of the expanded arguments are empty and generate a whitespace at the beginning of the macro body.
         return exp_code.lstrip()
@@ -467,7 +467,7 @@ class PyCpp():
              Directive(re.compile(r"^[ \t]*#[ \t]*endif(?:\s|$)", re.ASCII), self.__process_endif),
              Directive(re.compile(r"^[ \t]*#[ \t]*ifdef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifdef),
              Directive(re.compile(r"^[ \t]*#[ \t]*ifndef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifndef)))
-        self.macros: dict[Macro] = {}
+        self.macros: dict[str, Macro] = {}
 
     # ----- INTERFACE METHODS ----- #
 
@@ -633,7 +633,14 @@ class PyCpp():
                     body = dedent(body)
                 else:
                     body = body.lstrip()
-                self.macros[ident] = Macro(ident, args_list, body)
+                # if macro has arguments, then insert it at the beginning of the macros dictionary, because if a const macro
+                # is an argument to the func-like macro, the func-like macro needs to be expanded first in the expand_macros method.
+                if args_list:
+                    new_macro_dict = {ident: Macro(ident, args_list, body)}
+                    new_macro_dict.update(self.macros)
+                    self.macros = new_macro_dict
+                else:
+                    self.macros[ident] = Macro(ident, args_list, body)
             else:
                 log.err(f"Macro body not detected (%l):\n{code}", log.ErrSeverity.CRITICAL)
         else:
@@ -712,7 +719,9 @@ class PyCpp():
         out_code = code[:macro_ref_start_pos]
         if "\n" in exp_macro_code:
             # Indent macro body lines 1 and more using the indentation of the code line where the macro is referenced.
-            macro_insert_line = out_code.splitlines()[-1] if "\n" in out_code else out_code
+            macro_insert_line = "" if out_code.endswith("\n") else out_code
+            if "\n" in out_code and not out_code.endswith("\n"):
+                macro_insert_line = out_code.splitlines()[-1]
             strip_insert_line = macro_insert_line.lstrip()
             # Get whitespace characters used for the indentation of the code line where the macro is referenced.
             indent_symbols = macro_insert_line[: -len(strip_insert_line)] if strip_insert_line else macro_insert_line
