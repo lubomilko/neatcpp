@@ -250,7 +250,7 @@ class FileIO():
                     file_code = file.read()
                 break
         else:
-            log.err(f"File '{file_path}' not found.")
+            log.err(f"File '{file_path}' not found.", log.ErrSeverity.INFO)
             file_code = ""
         return file_code
 
