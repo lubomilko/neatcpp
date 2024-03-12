@@ -441,9 +441,11 @@ class Macro():
                 exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"##{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
                 exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}##", exp_code, 0, re.ASCII + re.MULTILINE)
                 # Perform stringification specified by the # operator.
-                exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", rf'\g<1>"{arg_val}"\g<2>', exp_code, 0, re.ASCII + re.MULTILINE)
+                exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", rf'\g<1>"{arg_val.replace("\\", "\\\\")}"\g<2>',
+                                  exp_code, 0, re.ASCII + re.MULTILINE)
                 # Replace the macro argument in macro body with the fully expanded argument value.
-                exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{fully_exp_arg_val}\g<2>", exp_code, 0, re.ASCII + re.MULTILINE)
+                exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{fully_exp_arg_val}\g<2>",
+                                  exp_code, 0, re.ASCII + re.MULTILINE)
         # Perform concatenatenations specified by the ## operator by removing the operator and its surrounding spaces.
         exp_code = re.sub(r"[\s\\]*##[\s\\]*", "", exp_code, 0, re.ASCII + re.MULTILINE)
         # Perform an lstrip in case some of the expanded arguments are empty and generate a whitespace at the beginning of the macro body.
@@ -636,6 +638,9 @@ class PyCpp():
                 # if macro has arguments, then insert it at the beginning of the macros dictionary, because if a const macro
                 # is an argument to the func-like macro, the func-like macro needs to be expanded first in the expand_macros method.
                 if args_list:
+                    # if macro is already in a dict, then it needs to be deleted, because update function will not change its value.
+                    if ident in self.macros:
+                        del self.macros[ident]
                     new_macro_dict = {ident: Macro(ident, args_list, body)}
                     new_macro_dict.update(self.macros)
                     self.macros = new_macro_dict
@@ -665,10 +670,10 @@ class PyCpp():
         self.__cond_mngr.exit_if()
 
     def __process_ifdef(self, parts: dict[str, str | None], code: str) -> None:
-        self.__cond_mngr.enter_if(parts["expr"] in self.macros)
+        self.__cond_mngr.enter_if(parts["expr"].strip() in self.macros)
 
     def __process_ifndef(self, parts: dict[str, str | None], code: str) -> None:
-        self.__cond_mngr.enter_if(parts["expr"] not in self.macros)
+        self.__cond_mngr.enter_if(parts["expr"].strip() not in self.macros)
 
     def __preproc_eval_expr(self, code: str) -> str:
         out_code = self.__eval_defined(code)
@@ -762,7 +767,8 @@ def run_console_app() -> None:
             pycpp.save_output_to_file(str(args.in_out_file_pairs[idx + 1]), args.full_output)
             pycpp.reset_output()
     else:
-        argparser.error("number of input and output file paths specified by the 'in_out_file_pairs' argument must be even")
+        argparser.error("number of input and output file paths specified by the 'in_out_file_pairs' argument must be even, "
+                        f"but {len(args.in_out_file_pairs)} were specified.")
 
 
 if __name__ == "__main__":
