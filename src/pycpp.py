@@ -42,7 +42,7 @@ __all__ = ["PyCpp"]
 
 CLI_DESCRIPTION = f"{__module_name__} {__version__}\n{(len(__module_name__) + len(__module_name__) + 1) * '-'}\n{__summary__}"
 CLI_EPILOG = __copyright__
-CLI_DEBUG_ARGS = None
+CLI_DEBUG_ARGS_LIST = None
 
 
 class Logger():
@@ -502,11 +502,13 @@ class PyCpp():
     def add_include_dirs(self, *dir_paths: str) -> None:
         self.__file_io.add_include_dir(*dir_paths)
 
-    def process_file(self, file_path: str, global_output: bool = True, full_local_output: bool = False) -> str:
-        file_code = self.__file_io.read_file(file_path)
+    def process_files(self, *file_paths: str, global_output: bool = True, full_local_output: bool = False) -> str:
+        file_code = ""
         local_output_code = ""
-        if file_code:
-            local_output_code = self.process_code(file_code, global_output, full_local_output, str(Path(file_path).name))
+        for file_path in file_paths:
+            file_code = self.__file_io.read_file(file_path)
+            if file_code:
+                local_output_code += self.process_code(file_code, global_output, full_local_output, Path(file_path).name)
         return local_output_code
 
     def process_code(self, code: str, global_output: bool = True, full_local_output: bool = False, proc_file_name: str = "") -> str:
@@ -614,7 +616,7 @@ class PyCpp():
     def __process_include(self, parts: dict[str, str | None], code: str) -> None:
         if parts["file"] is not None:
             orig_log_file_name = log.proc_file_name
-            self.process_file(parts["file"], False)
+            self.process_files(parts["file"], global_output=False)
             log.proc_file_name = orig_log_file_name
 
     def __process_define(self, parts: dict[str, str | None], code: str) -> None:
@@ -740,35 +742,30 @@ class PyCpp():
 def run_console_app() -> None:
     argparser = argparse.ArgumentParser(description=CLI_DESCRIPTION, epilog=CLI_EPILOG,
                                         formatter_class=argparse.RawDescriptionHelpFormatter)
-    argparser.add_argument("in_out_file_pairs", metavar="in_out_files", type=Path, nargs="+",
-                           help="in_file_1 out_file_1 [in_file_2 out_file_2 ...]\npairs of input C source and generated output files")
-    argparser.add_argument("-i", "--incl_dirs", metavar="include_directories", type=Path, nargs="+",
+    argparser.add_argument("in_files", metavar="input_files", type=Path, nargs="+",
+                           help="one or more input C source files to be processed into an output file")
+    argparser.add_argument("out_file", metavar="output_file", type=Path,
+                           help="output file generated from processed input files")
+    argparser.add_argument("-i", "--incl_dirs", metavar="incl_dir", type=Path, nargs="+",
                            help="directories to search for included files")
-    argparser.add_argument("-p", "--proc_files", metavar="process_files", type=Path, nargs="+",
-                           help="additional files to be processed first without generating an output file")
+    argparser.add_argument("-s", "--silent", metavar="file", type=Path, nargs="+",
+                           help="additional files to be preprocessed first silently without generating an output file")
     argparser.add_argument("-f", "--full_output", action="store_true",
                            help="include directives, all comments and whitespaces in the preprocessor output")
-    argparser.add_argument("-v", "--verbosity", metavar="verbosity_level", type=int, choices=range(3), default=0,
+    argparser.add_argument("-v", "--verbosity", metavar="level", type=int, choices=range(3), default=0,
                            help="set log messages verbosity level 0-2 (0 = log OFF), does not affect error and violation messages")
     argparser.add_argument("-V", "--version", action="version", version=f"{__module_name__} {__version__}")
 
-    args = argparser.parse_args(CLI_DEBUG_ARGS)
+    args = argparser.parse_args(CLI_DEBUG_ARGS_LIST)
 
-    if len(args.in_out_file_pairs) & 1 == 0:
-        log.config(args.verbosity)
-        pycpp = PyCpp()
-        if args.incl_dirs is not None:
-            pycpp.add_include_dirs(*args.incl_dirs)
-        if args.proc_files is not None:
-            for file in args.proc_files:
-                pycpp.process_file(str(file), False, False)
-        for idx in range(0, len(args.in_out_file_pairs), 2):
-            pycpp.process_file(str(args.in_out_file_pairs[idx]))
-            pycpp.save_output_to_file(str(args.in_out_file_pairs[idx + 1]), args.full_output)
-            pycpp.reset_output()
-    else:
-        argparser.error("number of input and output file paths specified by the 'in_out_file_pairs' argument must be even, "
-                        f"but {len(args.in_out_file_pairs)} were specified.")
+    log.config(args.verbosity)
+    pycpp = PyCpp()
+    if args.incl_dirs is not None:
+        pycpp.add_include_dirs(*args.incl_dirs)
+    if args.silent is not None:
+        pycpp.process_files(*args.silent, global_output=False)
+    pycpp.process_files(*args.in_files, global_output=True)
+    pycpp.save_output_to_file(args.out_file, args.full_output)
 
 
 if __name__ == "__main__":
