@@ -477,9 +477,17 @@ class PyCpp():
     def output(self) -> str:
         return self.__output.code
 
+    @output.setter
+    def output(self, code: str) -> None:
+        self.__output.code += code
+
     @property
     def output_full(self) -> str:
         return self.__output.code_all
+
+    @output_full.setter
+    def output_full(self, code: str) -> None:
+        self.__output.code_all += code
 
     def reset(self) -> None:
         self.__file_io.reset()
