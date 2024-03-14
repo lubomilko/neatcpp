@@ -481,9 +481,6 @@ class PyCpp():
     def output_full(self) -> str:
         return self.__output.code_all
 
-    def log_config(self, verbosity: int = 0, min_err_severity: int = log.ErrSeverity.INFO, enable_debug_msg: bool = False) -> None:
-        log.config(verbosity, min_err_severity, enable_debug_msg)
-
     def reset(self) -> None:
         self.__file_io.reset()
         self.__output.reset()
