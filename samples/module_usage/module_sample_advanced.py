@@ -4,7 +4,7 @@ import sys
 
 CURR_DIR_PATH = Path(__file__).parent
 
-sys.path.append(str(Path(CURR_DIR_PATH, "../src").resolve()))
+sys.path.append(str(Path(CURR_DIR_PATH, "../../src").resolve()))
 
 
 from pycpp import PyCpp     # noqa: E402
@@ -66,6 +66,10 @@ print(pycpp.output_full)
 #
 # 11 + 22
 
+print(pycpp.expand_macros("A + A == SUM(3, 7)"))
+# Prints:
+# 5 + 5 == 3 + 7
+
 print(pycpp.evaluate("A_SQR"))
 # Prints:
 # 25
@@ -74,18 +78,14 @@ print(pycpp.is_true("SUM(1, 2) >= 3"))
 # Prints:
 # True
 
-print(pycpp.expand_macros("A + A == SUM(3, 7)"))
-# Prints:
-# 5 + 5 == 3 + 7
-
 # Reset global preprocessor output.
 pycpp.reset_output()
 
 # Add include directory to search for included files.
-pycpp.add_include_dirs(Path(CURR_DIR_PATH, "incl"))
+pycpp.add_include_dirs(Path(CURR_DIR_PATH, "c_files", "incl"))
 # Process C code defined in files. Local output corresponding to the processed file code is returned but ignored.
-pycpp.process_files(Path(CURR_DIR_PATH, "sample_src_1.c"))
-pycpp.process_files(Path(CURR_DIR_PATH, "sample_src_2.c"))
+pycpp.process_files(Path(CURR_DIR_PATH, "c_files", "src1.c"))
+pycpp.process_files(Path(CURR_DIR_PATH, "c_files", "src2.c"))
 
 # Save output from both processed input files into the output file.
-pycpp.save_output_to_file(Path(CURR_DIR_PATH, "sample_src_out.c"))
+pycpp.save_output_to_file(Path(CURR_DIR_PATH, "c_files", "processed_src12.c"))

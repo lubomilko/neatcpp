@@ -2,7 +2,7 @@
 #define SIMPLE_MULTIP_H
 
 
-#define DEFINE_FUNC_MULTIPLY(TYPE, RET_TYPE)\
+#define DEFINE_MULTIPLY(TYPE, RET_TYPE)\
     RET_TYPE Multiply(TYPE ValA, TYPE ValB)\
     {\
         RET_TYPE RetVal;\

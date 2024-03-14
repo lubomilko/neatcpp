@@ -1,23 +1,13 @@
-# Introduction
+from pathlib import Path
+import sys
 
-**Pycpp** (**Py**thon **C** **p**re**p**rocessor) is a C code preprocessor written in Python. The preprocessor is not
-intended to create source files for the compiler. It is aimed at the creation of C source files with correctly
-expanded macros for the purposes of static analysis or code coverage analysis.
 
-The pycpp produces a code with formatting very close to the original code, i.e., the line endings, intendantion and
-comments are preserved, even in the expanded macro bodies. It is also possible to keep the original preprocessor
-directives.
+CURR_DIR_PATH = Path(__file__).parent
 
-# Usage
+sys.path.append(str(Path(CURR_DIR_PATH, "../../src").resolve()))
 
-## Pycpp as a Python module
 
-The code below shows the basic usage of pycpp as a Python module. See the `samples\module_usage` directory for the
-executable example listed below together with another slightly more advanced sample script.
-
-``` python
-# Import preprocessor class PyCpp
-from pycpp import PyCpp
+from pycpp import PyCpp     # noqa: E402
 
 
 SAMPLE_CODE = """
@@ -65,14 +55,10 @@ print(pycpp.is_true("CUBE(A - B) < CUBE(A + B)"))
 pycpp.reset_output()
 
 # Add include directory to search for included files.
-pycpp.add_include_dirs("path/to/incl/dir")
+pycpp.add_include_dirs(Path(CURR_DIR_PATH, "c_files", "incl"))
 
 # Process C code defined in file.
-pycpp.process_files("path/to/src.c")
+pycpp.process_files(Path(CURR_DIR_PATH, "c_files", "src1.c"))
 
 # Save preprocessor output to the output file.
-pycpp.save_output_to_file("path/to/src_processed.c")
-```
-
-## Pycpp as a standalone script
-
+pycpp.save_output_to_file(Path(CURR_DIR_PATH, "c_files", "processed_src1.c"))
