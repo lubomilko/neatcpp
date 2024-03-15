@@ -756,9 +756,9 @@ def run_console_app() -> None:
     argparser.add_argument("-s", "--silent", metavar="file", type=Path, nargs="+",
                            help="additional files to be preprocessed first silently without generating an output file")
     argparser.add_argument("-f", "--full_output", action="store_true",
-                           help="include directives, all comments and whitespaces in the preprocessor output")
+                           help="enable full output, i.e., include directives, all comments and whitespaces in the preprocessor output")
     argparser.add_argument("-v", "--verbosity", metavar="level", type=int, choices=range(3), default=0,
-                           help="set log messages verbosity level 0-2 (0 = log OFF), does not affect error and violation messages")
+                           help="set console log messages verbosity level 0-2 (0 = log OFF), does not affect error messages")
     argparser.add_argument("-V", "--version", action="version", version=f"{__module_name__} {__version__}")
 
     args = argparser.parse_args(CLI_DEBUG_ARGS_LIST)
