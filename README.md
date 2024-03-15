@@ -79,7 +79,7 @@ pycpp.save_output_to_file("path/to/src_processed.c")
 C source files can be processed by calling the pycpp from the commmand line with the arguments in a following format:
 
 ```text
-python pycpp.py in_src1.c [in_src2.c ...] out_src.c [-s silent_in_src1 [silent_in_src2 ...]] [-i incl_dir1 [incl_dir2 ...]] [-f] [-v 0-2] [-V]
+python pycpp.py in_src1.c [in_src2.c ...] out_src.c [-s silent_in_src1 [silent_in_src2 ...]] [-i incl_dir1 [incl_dir2 ...]] [-f] [-v 0-2] [-V] [-h]
 ```
 
 Positional arguments:
@@ -97,6 +97,7 @@ Optional arguments:
   preprocessor output
 - `-v 0-2` - Set console log verbosity level (0 = logging OFF with errors still shown).
 - `-V` - Show program name and version.
+- `-h` - Show help message and exit.
 
 Example of a call to process a single file with full output and verbosity at the maximum level 2:
 
