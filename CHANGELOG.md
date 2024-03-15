@@ -15,7 +15,7 @@ a C preprocessor in Python preserving the formatting of the original C source co
 *List of modifications for a future release.*
 
 
-## [1.0.0] - 2024-03-10
+## [1.0.0] - 2024-03-15
 
 *First release*
 
