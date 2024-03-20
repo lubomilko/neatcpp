@@ -17,6 +17,7 @@ SUM(11, 22)
 """
 
 SAMPLE_CODE_2 = """
+#define IGNORE_MACRO(X)     #X
 #define SQR(A)      A * A
 #define A 5
 
@@ -25,6 +26,8 @@ SAMPLE_CODE_2 = """
 #endif
 
 A_SQR /* Outputs 5 * 5 */
+
+IGNORE_MACRO(abc)
 """
 
 # Create the preprocessor object.
@@ -38,13 +41,17 @@ print(local_output)
 # Prints:
 # 11 + 22
 
+# Add macro identifier IGNORE_MACRO to the excluded macros. The macro will not be processed.
+pycpp.exclude_macros_files.append("IGNORE_MACRO")
+
 # Process C code defined in a SAMPLE_CODE_2 string and save the full processed output into the variable.
 # The full output means that everything from the original code (including preprocessor directives) is included in the output.
 # The processed code is not added the internal global preprocessor output.
 local_output = pycpp.process_code(SAMPLE_CODE_2, full_local_output=True, global_output=False)
 
-print(local_output)
+print(local_output)     # Notice the non-expanded macro IGNORE_MACRO that was excluded from processing.
 # Prints:
+# #define IGNORE_MACRO(X)     #X
 # #define SQR(A)      A * A
 # #define A 5
 #
@@ -53,6 +60,8 @@ print(local_output)
 # #endif
 #
 # 5 * 5 /* Outputs 5 * 5 */
+#
+# IGNORE_MACRO(abc)
 
 # Print global output (note that SAMPLE_CODE_2 output was not added to the global output).
 print(pycpp.output)

@@ -80,6 +80,13 @@ VARIADIC_MACRO(1, \
 REP(1, 5, 1)
 
 
+#define IGN_MACRO_OBJ    7 + 5
+#define IGN_MACRO_FUNC(A, B)   A ## B !
+
+IGN_MACRO_OBJ
+IGN_MACRO_FUNC(bana, na)
+
+
 #define A   101u
 
 #if A > 1u

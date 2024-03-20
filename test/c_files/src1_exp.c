@@ -32,6 +32,9 @@ X_1024    /* should be: X_1024 */
 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1*/
 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
 
+IGN_MACRO_OBJ
+IGN_MACRO_FUNC(bana, na)
+
 5 + 101u * 100u    /* Expected: 5 + 101u * 100u */
 
 5 + 12u * 10u    /* Expected: 5 + 12u * 10u */
