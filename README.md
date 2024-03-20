@@ -12,6 +12,9 @@ directives.
 
 ## Pycpp as a Python module
 
+Pycpp preprocessor object should be created as an instance of the `PyCpp` class and controlled through its public
+object attributes and methods.
+
 The code below shows the basic usage of pycpp as a Python module. See the *samples\module_usage* directory for the
 executable example listed below together with another slightly more advanced sample script.
 
@@ -80,7 +83,7 @@ pycpp.save_output_to_file("path/to/src_processed.c")
 C source files can be processed from a commmand line with the arguments in a following format:
 
 ```text
-python pycpp.py in1.c [in2.c ...] out.c [-s sin1.c [sin2.c ...]] [-i incl1 [incl2 ...]] [-f] [-v 0-2] [-V] [-h]
+python pycpp.py in1.c [in2.c ...] out.c [-s sin1.c [sin2.c ...]] [-i incl1 [incl2 ...]] [-x excl1 [excl2 ...]] [-f] [-v 0-2] [-V] [-h]
 ```
 
 Positional arguments:
@@ -94,6 +97,7 @@ Optional arguments:
   output, before processing the main input files.
 - `-i incl1 [incl2 ...]` - Included directories to search for the input files or for the included files
   defined by the `#include` statements in the input sources.
+- `-x` - Excluded macros or files. #define and #include statements for these identifiers will not be processed.
 - `-f` - Option to enable full output, i.e., to include directives, all comments and whitespaces in the
   preprocessor output
 - `-v 0-2` - Set console log verbosity level (0 = logging OFF with errors still shown).
