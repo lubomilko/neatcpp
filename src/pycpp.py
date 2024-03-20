@@ -32,12 +32,12 @@ from pathlib import Path
 __author__ = "Lubomir Milko"
 __copyright__ = "Copyright (C) 2024 Lubomir Milko"
 __module_name__ = "pycpp"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __license__ = "GPLv3"
 __summary__ = "C preprocessor in Python preserving the original C code formatting."
 
 
-__all__ = ["PyCpp"]
+__all__ = ["PyCpp", "Macro"]
 
 
 CLI_DESCRIPTION = f"{__module_name__} {__version__}\n{(len(__module_name__) + len(__module_name__) + 1) * '-'}\n{__summary__}"
@@ -453,6 +453,14 @@ class Macro():
 
 
 class PyCpp():
+    """C preprocessor class.
+
+    Attributes:
+        macros (dict[str, Macro]): A dictionary with all macros defined by the processed ``#define`` directives. This dictionary is
+            typically updated and used by this class itself, but can be modified by the user if necessary.
+        exclude_macros_files (list[str]): A list of user-defined macro names and file names to be excluded from processing.
+            The ``#define`` and ``#include`` directives for the specified macros and files will not be processed.
+    """
     def __init__(self) -> None:
         self.__file_io: FileIO = FileIO()
         self.__output: PreprocOutput = PreprocOutput()
@@ -470,44 +478,83 @@ class PyCpp():
              Directive(re.compile(r"^[ \t]*#[ \t]*ifdef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifdef),
              Directive(re.compile(r"^[ \t]*#[ \t]*ifndef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifndef)))
         self.macros: dict[str, Macro] = {}
+        self.exclude_macros_files: list[str] = []
 
     # ----- INTERFACE METHODS ----- #
-
     @property
     def output(self) -> str:
+        """Processed output string.
+
+        Returns:
+            str: Processed output string without the preprocessor directives, comments and whitespaces between them.
+        """
         return self.__output.code
 
     @output.setter
     def output(self, code: str) -> None:
-        self.__output.code += code
+        self.__output.code = code
 
     @property
     def output_full(self) -> str:
+        """Processed full output string including all preprocessor directives, comments and whitespaces.
+
+        Returns:
+            str: Full processed output string including all preprocessor directives, comments and whitespaces.
+        """
         return self.__output.code_all
 
     @output_full.setter
     def output_full(self, code: str) -> None:
-        self.__output.code_all += code
+        self.__output.code_all = code
 
     def reset(self) -> None:
+        """Resets the preprocessor including its output and all other internal values.
+        """
         self.__file_io.reset()
         self.__output.reset()
         self.__cond_mngr.reset()
         self.macros = {}
+        self.exclude_macros_files = []
 
     def reset_output(self) -> None:
+        """Resets the preprocessor output only. Other internal values remain unchanged.
+        """
         self.__output.reset()
 
     def save_output_to_file(self, file_path: str, full_output: bool = False) -> None:
+        """Saves the processed output to file.
+
+        Args:
+            file_path (str): Save file path.
+            full_output (bool, optional): Flag to save the full output, i.e., including all preprocessor directives,
+                all comments and whitespaces. Defaults to False.
+        """
         with open(file_path, "w", encoding="utf-8") as file:
             log.msg(f"Saving processed output to file '{Path(file_path).name}'.")
             output = self.output_full if full_output else self.output
             file.write(output)
 
     def add_include_dirs(self, *dir_paths: str) -> None:
+        """Adds paths to the included directories for searching files specified either manually or by the #include directives.
+
+        Args:
+            dir_paths (str): One or more arguments specifying paths to include directories.
+        """
         self.__file_io.add_include_dir(*dir_paths)
 
     def process_files(self, *file_paths: str, global_output: bool = True, full_local_output: bool = False) -> str:
+        """Processes the specified C source files
+
+        Args:
+            file_paths (str): One or more arguments specifying paths to processed files.
+            global_output (bool, optional): Flag to add the processed output to the global internal preprocessor output.
+                Defaults to True.
+            full_local_output (bool, optional): Flag to return the full output (including directives, etc.) instead of
+                the standard output (without directives). Defaults to False.
+
+        Returns:
+            str: Local output for the processed file. Generated always, regardless of the ``global_output`` argument value.
+        """
         file_code = ""
         local_output_code = ""
         for file_path in file_paths:
@@ -517,6 +564,20 @@ class PyCpp():
         return local_output_code
 
     def process_code(self, code: str, global_output: bool = True, full_local_output: bool = False, proc_file_name: str = "") -> str:
+        """Processes the specified source code string.
+
+        Args:
+            code (str): Source code to be processed.
+            global_output (bool, optional): Flag to add the processed output to the global internal preprocessor output.
+                Defaults to True.
+            full_local_output (bool, optional): Flag to return the full output (including directives, etc.) instead of
+                the standard output (without directives). Defaults to False.
+            proc_file_name (str, optional): File name to be assigned to the specified source code. Used only for
+                console logging purposes. Defaults to "".
+
+        Returns:
+            str: Local output for the processed code. Generated always, regardless of the ``global_output`` argument value.
+        """
         if proc_file_name:
             log.msg(f"Processing file '{Path(proc_file_name).name}'.")
         else:
@@ -544,6 +605,18 @@ class PyCpp():
         return local_output.code_all if full_local_output else local_output.code
 
     def evaluate(self, expr_code: str) -> any:
+        """Evaluates the specified C expression to the numerical value. Only simple C code expressions are supported.
+        Ternary operator is not supported. Multiline or other more complex expressions might not be evaluated correctly.
+
+        .. warning::
+            Python's ``eval()`` function is used, so this method could be potentially dangerous.
+
+        Args:
+            expr_code (str): C code expression to be evaluated.
+
+        Returns:
+            any: Value corresponding to the evaluated C expression.
+        """
         expr_code = self.__preproc_eval_expr(expr_code)
         # Expression must already be preprocessed, i.e., lines joined, comments removed, macros expanded.
         expr_code = expr_code.replace("&&", " and ").replace("||", " or ").replace("/", "//")
@@ -557,6 +630,17 @@ class PyCpp():
         return output
 
     def is_true(self, expr_code: str) -> bool:
+        """Evaluates the specified C expression to the boolean true or false value.
+
+        .. warning::
+            The limitations and warnings specified for the :py:meth:`pycpp.PyCpp.evaluate` method apply also to this method.
+
+        Args:
+            expr_code (str): C code expression to be evaluated to the boolean value.
+
+        Returns:
+            bool: Boolean value corresponding to the evaluated C expression.
+        """
         expr_code = self.__preproc_eval_expr(expr_code)
         state = self.evaluate(expr_code)
         if isinstance(state, str):
@@ -564,6 +648,17 @@ class PyCpp():
         return bool(state)
 
     def expand_macros(self, code: str, exp_depth: int = 0) -> str:
+        """Expands macro references of known macros in the specified C code.
+
+        Args:
+            code (str): C code in which the macro references should be expanded.
+            exp_depth (int, optional): Macro expansion depth. Used internally to limit the expansion to 512 levels at maximum
+                to avoid potential infinite loops or using too much memory. This parameter should not be changed by the user.
+                Defaults to 0.
+
+        Returns:
+            str: C code with the expanded macro references.
+        """
         exp_code = code
         if exp_depth == 0:
             exp_code = CodeFormatter.remove_line_escapes(exp_code)
@@ -619,7 +714,7 @@ class PyCpp():
         return processed
 
     def __process_include(self, parts: dict[str, str | None], code: str) -> None:
-        if parts["file"] is not None:
+        if parts["file"] is not None and parts["file"] not in self.exclude_macros_files:
             orig_log_file_name = log.proc_file_name
             self.process_files(parts["file"], global_output=False)
             log.proc_file_name = orig_log_file_name
@@ -627,34 +722,34 @@ class PyCpp():
     def __process_define(self, parts: dict[str, str | None], code: str) -> None:
         if parts["ident"] is not None:
             ident = parts["ident"]
-            args_list = [arg.strip() for arg in parts["args"].split(",")] if parts["args"] is not None else []
-
-            multiline_code = CodeFormatter.remove_line_escapes(code, True)
-            # Find the starting position of the macro body, i.e., the last argument position or the end position of the macro identifier.
-            if args_list:
-                re_match = re.search(rf"{args_list[-1]}\s*\)", multiline_code, re.ASCII)
-            else:
-                re_match = re.search(rf"{ident}[ \t]*", multiline_code, re.ASCII)
-            if re_match is not None:
-                body = multiline_code[re_match.end():].rstrip()
-                if body.startswith("\n"):
-                    body = body[1:]
-                    body = dedent(body)
-                else:
-                    body = body.lstrip()
-                # if macro has arguments, then insert it at the beginning of the macros dictionary, because if a const macro
-                # is an argument to the func-like macro, the func-like macro needs to be expanded first in the expand_macros method.
+            if ident not in self.exclude_macros_files:
+                args_list = [arg.strip() for arg in parts["args"].split(",")] if parts["args"] is not None else []
+                multiline_code = CodeFormatter.remove_line_escapes(code, True)
+                # Find the starting position of the macro body, i.e., the last argument position or the end position of the macro ident.
                 if args_list:
-                    # if macro is already in a dict, then it needs to be deleted, because update function will not change its value.
-                    if ident in self.macros:
-                        del self.macros[ident]
-                    new_macro_dict = {ident: Macro(ident, args_list, body)}
-                    new_macro_dict.update(self.macros)
-                    self.macros = new_macro_dict
+                    re_match = re.search(rf"{args_list[-1]}\s*\)", multiline_code, re.ASCII)
                 else:
-                    self.macros[ident] = Macro(ident, args_list, body)
-            else:
-                log.err(f"Macro body not detected (%l):\n{code}", log.ErrSeverity.CRITICAL)
+                    re_match = re.search(rf"{ident}[ \t]*", multiline_code, re.ASCII)
+                if re_match is not None:
+                    body = multiline_code[re_match.end():].rstrip()
+                    if body.startswith("\n"):
+                        body = body[1:]
+                        body = dedent(body)
+                    else:
+                        body = body.lstrip()
+                    # if macro has arguments, then insert it at the beginning of the macros dictionary, because if a const macro
+                    # is an argument to the func-like macro, the func-like macro needs to be expanded first in the expand_macros method.
+                    if args_list:
+                        # if macro is already in a dict, then it needs to be deleted, because update function will not change its value.
+                        if ident in self.macros:
+                            del self.macros[ident]
+                        new_macro_dict = {ident: Macro(ident, args_list, body)}
+                        new_macro_dict.update(self.macros)
+                        self.macros = new_macro_dict
+                    else:
+                        self.macros[ident] = Macro(ident, args_list, body)
+                else:
+                    log.err(f"Macro body not detected (%l):\n{code}", log.ErrSeverity.CRITICAL)
         else:
             log.err(f"#define with an unexpected formatting detected (%l):\n{code}", log.ErrSeverity.CRITICAL)
 
@@ -755,6 +850,8 @@ def run_console_app() -> None:
                            help="directories to search for included files")
     argparser.add_argument("-s", "--silent", metavar="file", type=Path, nargs="+",
                            help="additional files to be preprocessed first silently without generating an output file")
+    argparser.add_argument("-x", "--exclude", metavar="macro_or_file", type=str, nargs="+",
+                           help="excluded macros or files for which the #define and #include directives will not be processed")
     argparser.add_argument("-f", "--full_output", action="store_true",
                            help="enable full output, i.e., include directives, all comments and whitespaces in the preprocessor output")
     argparser.add_argument("-v", "--verbosity", metavar="level", type=int, choices=range(3), default=0,
@@ -769,6 +866,8 @@ def run_console_app() -> None:
         pycpp.add_include_dirs(*args.incl_dirs)
     if args.silent is not None:
         pycpp.process_files(*args.silent, global_output=False)
+    if args.exclude is not None:
+        pycpp.exclude_macros_files = args.exclude
     pycpp.process_files(*args.in_files, global_output=True)
     pycpp.save_output_to_file(args.out_file, args.full_output)
 
