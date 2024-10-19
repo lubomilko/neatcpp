@@ -32,7 +32,7 @@ from pathlib import Path
 __author__ = "Lubomir Milko"
 __copyright__ = "Copyright (C) 2024 Lubomir Milko"
 __module_name__ = "pycpp"
-__version__ = "1.1.0"
+__version__ = "1.1.3"
 __license__ = "GPLv3"
 __summary__ = "C preprocessor in Python preserving the original C code formatting."
 
@@ -119,7 +119,7 @@ class PreprocLogger(Logger):
         return text.replace("%l", loc)
 
     def get_code_sample(self, code: str, sample_len: int = 80) -> str:
-        sample = f"{code.replace("\n", "").lstrip()[:sample_len]}"
+        sample = code.replace("\n", "").lstrip()[:sample_len]
         if len(code) > sample_len:
             sample = f"{sample} ..."
         return sample
@@ -441,7 +441,7 @@ class Macro():
                 exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"##{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
                 exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}##", exp_code, 0, re.ASCII + re.MULTILINE)
                 # Perform stringification specified by the # operator.
-                exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", rf'\g<1>"{arg_val.replace("\\", "\\\\")}"\g<2>',
+                exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", rf"""\g<1>"{arg_val.replace('\\', '\\\\')}"\g<2>""",
                                   exp_code, 0, re.ASCII + re.MULTILINE)
                 # Replace the macro argument in macro body with the fully expanded argument value.
                 exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{fully_exp_arg_val}\g<2>",
@@ -678,8 +678,9 @@ class PyCpp():
                     if args_start_pos >= 0:
                         macro_end_pos = args_end_pos + 1
                         arg_vals = self.__extract_macro_ref_args(exp_code[args_start_pos + 1: args_end_pos])
-                    if len(arg_vals) < len(macro.args):
-                        log.err(f"{macro_id} macro reference is missing some of its {len(macro.args)} arguments (%l).",
+                    req_args_num = len(macro.args) - 1 if macro.args[-1] == "..." else len(macro.args)
+                    if len(arg_vals) < req_args_num:
+                        log.err(f"{macro_id} macro reference is missing some of its {len(macro.args)} required arguments (%l).",
                                 log.ErrSeverity.CRITICAL)
                     # Create a list of fully expanded macro arguments.
                     fully_exp_arg_vals = []
@@ -806,20 +807,19 @@ class PyCpp():
 
     def __extract_macro_ref_args(self, args_code: str) -> list[str]:
         args = []
-        if args_code:
-            args_code = args_code.strip().replace("\n", "")
-            temp_args = [arg for arg in args_code.split(",")]
-            arg_idx = 0
-            args.append(temp_args[0])
-            for temp_arg in temp_args[1:]:
-                # Check if the argument args[arg_idx] does not contain uneven number of parentheses or apostrophes, e.g. "value(1".
-                # If yes, then the argument is incomplete and the next argument temp_arg needs to be added to it, e.g. "value(1, 2)".
-                if ((args[arg_idx].count("\"") & 1) or (args[arg_idx].count("\'") & 1) or
-                        (args[arg_idx].count("(") != args[arg_idx].count(")"))):
-                    args[arg_idx] = f"{args[arg_idx]}, {temp_arg}"
-                else:
-                    args.append(temp_arg.strip())
-                    arg_idx += 1
+        args_code = args_code.strip().replace("\n", "")
+        temp_args = [arg for arg in args_code.split(",")]
+        arg_idx = 0
+        args.append(temp_args[0])
+        for temp_arg in temp_args[1:]:
+            # Check if the argument args[arg_idx] does not contain uneven number of parentheses or apostrophes, e.g. "value(1".
+            # If yes, then the argument is incomplete and the next argument temp_arg needs to be added to it, e.g. "value(1, 2)".
+            if ((args[arg_idx].count("\"") & 1) or (args[arg_idx].count("\'") & 1) or
+                    (args[arg_idx].count("(") != args[arg_idx].count(")"))):
+                args[arg_idx] = f"{args[arg_idx]}, {temp_arg}"
+            else:
+                args.append(temp_arg.strip())
+                arg_idx += 1
         return args
 
     def __insert_expanded_macro(self, code: str, macro_ref_start_pos: int, macro_ref_end_pos: int, exp_macro_code: str) -> str:

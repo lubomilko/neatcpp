@@ -10,9 +10,21 @@ a C preprocessor in Python preserving the formatting of the original C source co
 ---
 
 
-## [unreleased] - 202x-xx-xx
+## [1.1.3] - 2024-10-19
 
-*List of modifications for a future release.*
+> **_Note:_** The version is set to 1.1.3 for consistency with other repo, where the fixes were
+> applied separately through a longer period of time.
+
+### Fixed
+
+- Fix nested parentheses of the same type in methods `get_code_sample` and `expand_args` causing
+  errors with certain Python versions.
+- Do not require ellipsis (`...`) argument in a variadic macro to be filled with at least one
+  argument in a macro reference. This fixes an invalid detection of insufficient amount of
+  arguments in a macro reference where no arguments are provided for the ellipsis.
+- Treat an empty argument in a function-like macro reference as a valid argument. This fixes an
+  invalid detection of insufficient amount of arguments in a macro reference, where some arguments
+  are empty.
 
 
 ## [1.1.0] - 2024-03-20
@@ -30,5 +42,6 @@ a C preprocessor in Python preserving the formatting of the original C source co
 
 
 [unreleased]: https://github.com/lubomilko/pycpp
-[1.0.0]: https://github.com/lubomilko/pycpp/releases/tag/1.0.0
+[1.1.3]: https://github.com/lubomilko/pycpp/releases/tag/1.1.3
 [1.1.0]: https://github.com/lubomilko/pycpp/releases/tag/1.1.0
+[1.0.0]: https://github.com/lubomilko/pycpp/releases/tag/1.0.0
