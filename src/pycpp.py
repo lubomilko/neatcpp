@@ -32,7 +32,7 @@ from pathlib import Path
 __author__ = "Lubomir Milko"
 __copyright__ = "Copyright (C) 2024 Lubomir Milko"
 __module_name__ = "pycpp"
-__version__ = "1.1.3"
+__version__ = "1.1.4"
 __license__ = "GPLv3"
 __summary__ = "C preprocessor in Python preserving the original C code formatting."
 
@@ -57,7 +57,7 @@ class Logger():
         self.min_err_severity: int = min_err_severity
         self.debug_msg_enabled: bool = enable_debug_msg
         self.__msg_printer: Callable[[str, bool, str], None] = self.default_msg_printer
-        self.__err_printer: Callable[[str, self.ErrSeverity, str], None] = self.default_err_printer
+        self.__err_printer: Callable[[str, Logger.ErrSeverity, str], None] = self.default_err_printer
 
     def config(self, verbosity: int = 0, min_err_severity: int = ErrSeverity.INFO, enable_debug_msg: bool = False) -> None:
         self.verbosity = verbosity
@@ -262,8 +262,8 @@ class ConditionManager():
         IGNORE = 2  # if/elif/else branch code is not enabled, i.e. the condition does not have to be evaluated anymore.
 
     def __init__(self) -> None:
-        self.branch_state: self.BranchState = self.BranchState.ACTIVE
-        self.branch_state_stack: list[self.BranchState] = []
+        self.branch_state: ConditionManager.BranchState = self.BranchState.ACTIVE
+        self.branch_state_stack: list[ConditionManager.BranchState] = []
 
     def reset(self) -> None:
         self.branch_state = self.BranchState.ACTIVE
@@ -441,7 +441,7 @@ class Macro():
                 exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"##{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
                 exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}##", exp_code, 0, re.ASCII + re.MULTILINE)
                 # Perform stringification specified by the # operator.
-                exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", rf"""\g<1>"{arg_val.replace('\\', '\\\\')}"\g<2>""",
+                exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", r'\g<1>"' + arg_val.replace("\\", "\\\\") + r'"\g<2>',
                                   exp_code, 0, re.ASCII + re.MULTILINE)
                 # Replace the macro argument in macro body with the fully expanded argument value.
                 exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{fully_exp_arg_val}\g<2>",

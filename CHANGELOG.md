@@ -10,6 +10,17 @@ a C preprocessor in Python preserving the formatting of the original C source co
 ---
 
 
+## [1.1.4] - 2024-10-21
+
+### Fixed
+
+- Fix nested parentheses of the same type in `expand_args` method causing an error with certain
+  Python versions. This should have been fixed in 1.1.3, but the previous fix introduced other
+  issue.
+- Fix *Variable not allowed in type expression* warning in the `__init__` methods of the
+  `Logger` and `ConditionManager` classes.
+
+
 ## [1.1.3] - 2024-10-19
 
 > **_Note:_** The version is set to 1.1.3 for consistency with other repo, where the fixes were
@@ -42,6 +53,7 @@ a C preprocessor in Python preserving the formatting of the original C source co
 
 
 [unreleased]: https://github.com/lubomilko/pycpp
+[1.1.4]: https://github.com/lubomilko/pycpp/releases/tag/1.1.4
 [1.1.3]: https://github.com/lubomilko/pycpp/releases/tag/1.1.3
 [1.1.0]: https://github.com/lubomilko/pycpp/releases/tag/1.1.0
 [1.0.0]: https://github.com/lubomilko/pycpp/releases/tag/1.0.0
