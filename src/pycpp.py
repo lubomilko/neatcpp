@@ -438,16 +438,16 @@ class Macro():
                     arg_val = arg_vals[arg_idx] if arg_idx < len(arg_vals) else ""
                     fully_exp_arg_val = fully_exp_arg_vals[arg_idx] if arg_idx < len(fully_exp_arg_vals) else ""
                 # Perform concatenatenation of macro arguments specified by the ## operator.
-                exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"##{arg_val}", exp_code, 0, re.ASCII + re.MULTILINE)
-                exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}##", exp_code, 0, re.ASCII + re.MULTILINE)
+                exp_code = re.sub(rf"[\s\\]*##[\s\\]*{arg_name}", rf"##{arg_val}", exp_code, count=0, flags=re.ASCII + re.MULTILINE)
+                exp_code = re.sub(rf"{arg_name}[\s\\]*##[\s\\]*", rf"{arg_val}##", exp_code, count=0, flags=re.ASCII + re.MULTILINE)
                 # Perform stringification specified by the # operator.
                 exp_code = re.sub(rf"(^|[^#])#\s*{arg_name}($|[^\w])", r'\g<1>"' + arg_val.replace("\\", "\\\\") + r'"\g<2>',
-                                  exp_code, 0, re.ASCII + re.MULTILINE)
+                                  exp_code, count=0, flags=re.ASCII + re.MULTILINE)
                 # Replace the macro argument in macro body with the fully expanded argument value.
                 exp_code = re.sub(rf"(^|[^\w]){arg_name}($|[^\w])", rf"\g<1>{fully_exp_arg_val}\g<2>",
-                                  exp_code, 0, re.ASCII + re.MULTILINE)
+                                  exp_code, count=0, flags=re.ASCII + re.MULTILINE)
         # Perform concatenatenations specified by the ## operator by removing the operator and its surrounding spaces.
-        exp_code = re.sub(r"[\s\\]*##[\s\\]*", "", exp_code, 0, re.ASCII + re.MULTILINE)
+        exp_code = re.sub(r"[\s\\]*##[\s\\]*", "", exp_code, count=0, flags=re.ASCII + re.MULTILINE)
         # Perform an lstrip in case some of the expanded arguments are empty and generate a whitespace at the beginning of the macro body.
         return exp_code.lstrip()
 
@@ -795,7 +795,7 @@ class PyCpp():
             return " 1" if ident is not None and ident in self.macros else " 0"
 
         return re.sub(r"(?:^|[ \t])defined[ \t]*\(?\s*(?P<ident>\w+)[ \t]*\)?",
-                      repl_defined, code, 0, re.ASCII + re.MULTILINE)
+                      repl_defined, code, count=0, flags=re.ASCII + re.MULTILINE)
 
     def __get_macro_ident_pos(self, code: str, macro_ident: str, has_args: bool = False) -> int:
         macro_id_pos = -1

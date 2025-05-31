@@ -10,6 +10,19 @@ a C preprocessor in Python preserving the formatting of the original C source co
 ---
 
 
+## [unreleased] - 202y-mm-dd
+
+*List of modifications for a future release.*
+
+
+## [1.1.5] - 2025-05-31
+
+### Fixed
+
+- Fix deprecation warning for the `count` positional argument in the `re.sub` methods when
+  using Python 3.13 or newer.
+
+
 ## [1.1.4] - 2024-10-21
 
 ### Fixed
@@ -53,6 +66,7 @@ a C preprocessor in Python preserving the formatting of the original C source co
 
 
 [unreleased]: https://github.com/lubomilko/pycpp
+[1.1.5]: https://github.com/lubomilko/pycpp/releases/tag/1.1.5
 [1.1.4]: https://github.com/lubomilko/pycpp/releases/tag/1.1.4
 [1.1.3]: https://github.com/lubomilko/pycpp/releases/tag/1.1.3
 [1.1.0]: https://github.com/lubomilko/pycpp/releases/tag/1.1.0
