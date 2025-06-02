@@ -1,8 +1,8 @@
 """
-pycpp - C preprocessor in Python preserving the original C code formatting.
+neatcpp - A minimalistic C preprocessor preserving the original C code formatting.
 
-Copyright (C) 2024 Lubomir Milko
-This file is part of pycpp <https://github.com/lubomilko/pycpp>.
+Copyright (C) 2025 Lubomir Milko
+This file is part of neatcpp <https://github.com/lubomilko/neatcpp>.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+# pylint: disable=missing-class-docstring, missing-function-docstring
 
 import re
 import sys
@@ -27,17 +28,13 @@ from typing import Callable, Generator
 from textwrap import dedent
 from pathlib import Path
 
-# pylint: unused-argument
 
 __author__ = "Lubomir Milko"
-__copyright__ = "Copyright (C) 2024 Lubomir Milko"
-__module_name__ = "pycpp"
-__version__ = "1.1.4"
+__copyright__ = "Copyright (C) 2025 Lubomir Milko"
+__version__ = "1.2.0"
 __license__ = "GPLv3"
-__summary__ = "C preprocessor in Python preserving the original C code formatting."
-
-
-__all__ = ["PyCpp", "Macro"]
+__module_name__ = "neatcpp"
+__summary__ = "A minimalistic C preprocessor preserving the original C code formatting."
 
 
 CLI_DESCRIPTION = f"{__module_name__} {__version__}\n{(len(__module_name__) + len(__module_name__) + 1) * '-'}\n{__summary__}"
@@ -230,7 +227,7 @@ class FileIO():
     def reset(self) -> None:
         self.incl_dir_paths = [Path("")]
 
-    def add_include_dir(self, *dir_paths: str) -> None:
+    def add_include_dir(self, *dir_paths: str | Path) -> None:
         for dir_path in dir_paths:
             log.msg(f"Adding include directory '{Path(dir_path).name}'.")
             incl_dir_path = Path(dir_path).resolve()
@@ -242,7 +239,7 @@ class FileIO():
             else:
                 log.err(f"Include dir '{dir_path}' not found.")
 
-    def read_file(self, file_path: str) -> str:
+    def read_file(self, file_path: str | Path) -> str:
         for incl_dir_path in self.incl_dir_paths:
             incl_file_path = Path(incl_dir_path, Path(file_path))
             if incl_file_path.is_file():
@@ -399,27 +396,28 @@ class DirectiveGroup(IntEnum):
 
 
 class Directive():
-    def __init__(self, re_ptrn: re.Pattern = None, handler: Callable[[dict[str, str | None], str], None] = None) -> None:
-        self.re_ptrn: re.Pattern = re_ptrn
-        self.handler: Callable[[dict[str, str | None], str], None] = handler
+    def __init__(self, re_ptrn: re.Pattern | None = None, handler: Callable[[dict[str, str | None], str], None] | None = None) -> None:
+        self.re_ptrn: re.Pattern | None = re_ptrn
+        self.handler: Callable[[dict[str, str | None], str], None] | None = handler
 
     def process(self, code: str) -> bool:
         processed = False
-        joined_code = CodeFormatter.remove_line_escapes(code)
-        re_match = self.re_ptrn.match(joined_code)
-        if re_match:
-            self.handler(re_match.groupdict(), code)
-            processed = True
+        if self.re_ptrn and self.handler:
+            joined_code = CodeFormatter.remove_line_escapes(code)
+            re_match = self.re_ptrn.match(joined_code)
+            if re_match:
+                self.handler(re_match.groupdict(), code)
+                processed = True
         return processed
 
 
 class Macro():
-    def __init__(self, identifier: str = "", args: list[str] = None, body: str = "") -> None:
+    def __init__(self, identifier: str = "", args: list[str] | None = None, body: str = "") -> None:
         self.identifier: str = identifier
         self.args: list[str] = args if args is not None else []
         self.body: str = body
 
-    def expand_args(self, arg_vals: list[str] = None, fully_exp_arg_vals: list[str] = None) -> str:
+    def expand_args(self, arg_vals: list[str] | None = None, fully_exp_arg_vals: list[str] | None = None) -> str:
         exp_code = self.body
         if arg_vals is not None and fully_exp_arg_vals is not None:
             for (arg_idx, arg_name) in enumerate(self.args):
@@ -452,8 +450,8 @@ class Macro():
         return exp_code.lstrip()
 
 
-class PyCpp():
-    """C preprocessor class.
+class NeatCpp():
+    """A minimalistic C preprocessor class.
 
     Attributes:
         macros (dict[str, Macro]): A dictionary with all macros defined by the processed ``#define`` directives. This dictionary is
@@ -465,7 +463,7 @@ class PyCpp():
         self.__file_io: FileIO = FileIO()
         self.__output: PreprocOutput = PreprocOutput()
         self.__cond_mngr: ConditionManager = ConditionManager()
-        self.__directives: tuple[tuple[Directive]] = (
+        self.__directives: tuple[tuple[Directive, ...], ...] = (
             # DirectiveGroup.STANDARD
             (Directive(re.compile(r"^[ \t]*#[ \t]*define[ \t]+(?P<ident>\w+)(?:\((?P<args>[^\)]*)\))?", re.ASCII), self.__process_define),
              Directive(re.compile(r"^[ \t]*#[ \t]*undef[ \t]+(?P<ident>\w+)", re.ASCII), self.__process_undef),
@@ -521,7 +519,7 @@ class PyCpp():
         """
         self.__output.reset()
 
-    def save_output_to_file(self, file_path: str, full_output: bool = False) -> None:
+    def save_output_to_file(self, file_path: str | Path, full_output: bool = False) -> None:
         """Saves the processed output to file.
 
         Args:
@@ -534,7 +532,7 @@ class PyCpp():
             output = self.output_full if full_output else self.output
             file.write(output)
 
-    def add_include_dirs(self, *dir_paths: str) -> None:
+    def add_include_dirs(self, *dir_paths: str | Path) -> None:
         """Adds paths to the included directories for searching files specified either manually or by the #include directives.
 
         Args:
@@ -542,7 +540,7 @@ class PyCpp():
         """
         self.__file_io.add_include_dir(*dir_paths)
 
-    def process_files(self, *file_paths: str, global_output: bool = True, full_local_output: bool = False) -> str:
+    def process_files(self, *file_paths: str | Path, global_output: bool = True, full_local_output: bool = False) -> str:
         """Processes the specified C source files
 
         Args:
@@ -604,7 +602,7 @@ class PyCpp():
             log.err("Unterminated #if detected in a previous code (%l).", log.ErrSeverity.CRITICAL)
         return local_output.code_all if full_local_output else local_output.code
 
-    def evaluate(self, expr_code: str) -> any:
+    def evaluate(self, expr_code: str) -> object:
         """Evaluates the specified C expression to the numerical value. Only simple C code expressions are supported.
         Ternary operator is not supported. Multiline or other more complex expressions might not be evaluated correctly.
 
@@ -633,7 +631,7 @@ class PyCpp():
         """Evaluates the specified C expression to the boolean true or false value.
 
         .. warning::
-            The limitations and warnings specified for the :py:meth:`pycpp.PyCpp.evaluate` method apply also to this method.
+            The limitations and warnings specified for the :py:meth:`neatcpp.NeatCpp.evaluate` method apply also to this method.
 
         Args:
             expr_code (str): C code expression to be evaluated to the boolean value.
@@ -667,7 +665,7 @@ class PyCpp():
             return exp_code
 
         for (macro_id, macro) in self.macros.items():
-            macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, macro.args)
+            macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, bool(macro.args))
             while macro_start_pos >= 0 and (not CodeFormatter.is_in_comment(exp_code, macro_start_pos) and
                                             not CodeFormatter.is_in_string(exp_code, macro_start_pos)):
                 log.msg(f"    {exp_depth * '    '}Expanding macro '{macro_id}'.", 2)
@@ -693,7 +691,7 @@ class PyCpp():
                 # Recursively expand the expanded macro body.
                 exp_macro_code = self.expand_macros(exp_macro_code, exp_depth + 1)
                 exp_code = self.__insert_expanded_macro(exp_code, macro_start_pos, macro_end_pos, exp_macro_code)
-                macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, macro.args)
+                macro_start_pos = self.__get_macro_ident_pos(exp_code, macro_id, bool(macro.args))
         return exp_code
 
     # ----- END OF INTERFACE METHODS ----- #
@@ -714,7 +712,7 @@ class PyCpp():
                     break
         return processed
 
-    def __process_include(self, parts: dict[str, str | None], code: str) -> None:
+    def __process_include(self, parts: dict[str, str | None], _code: str) -> None:
         if parts["file"] is not None and parts["file"] not in self.exclude_macros_files:
             orig_log_file_name = log.proc_file_name
             self.process_files(parts["file"], global_output=False)
@@ -754,29 +752,31 @@ class PyCpp():
         else:
             log.err(f"#define with an unexpected formatting detected (%l):\n{code}", log.ErrSeverity.CRITICAL)
 
-    def __process_undef(self, parts: dict[str, str | None], code: str) -> None:
+    def __process_undef(self, parts: dict[str, str | None], _code: str) -> None:
         if parts["ident"] is not None and parts["ident"] in self.macros:
             del self.macros[parts["ident"]]
 
-    def __process_if(self, parts: dict[str, str | None], code: str) -> None:
-        is_true = self.is_true(parts["expr"]) if self.__cond_mngr.branch_active else False
+    def __process_if(self, parts: dict[str, str | None], _code: str) -> None:
+        is_true = self.is_true(parts["expr"]) if self.__cond_mngr.branch_active and parts["expr"] else False
         self.__cond_mngr.enter_if(is_true)
 
-    def __process_elif(self, parts: dict[str, str | None], code: str) -> None:
-        is_true = self.is_true(parts["expr"]) if self.__cond_mngr.branch_search_active else False
+    def __process_elif(self, parts: dict[str, str | None], _code: str) -> None:
+        is_true = self.is_true(parts["expr"]) if self.__cond_mngr.branch_search_active and parts["expr"] else False
         self.__cond_mngr.enter_elif(is_true)
 
-    def __process_else(self, parts: dict[str, str | None], code: str) -> None:
+    def __process_else(self, _parts: dict[str, str | None], _code: str) -> None:
         self.__cond_mngr.enter_elif(True)
 
-    def __process_endif(self, parts: dict[str, str | None], code: str) -> None:
+    def __process_endif(self, _parts: dict[str, str | None], _code: str) -> None:
         self.__cond_mngr.exit_if()
 
-    def __process_ifdef(self, parts: dict[str, str | None], code: str) -> None:
-        self.__cond_mngr.enter_if(parts["expr"].strip() in self.macros)
+    def __process_ifdef(self, parts: dict[str, str | None], _code: str) -> None:
+        expr = parts["expr"].strip() if parts["expr"] else ""
+        self.__cond_mngr.enter_if(expr in self.macros)
 
-    def __process_ifndef(self, parts: dict[str, str | None], code: str) -> None:
-        self.__cond_mngr.enter_if(parts["expr"].strip() not in self.macros)
+    def __process_ifndef(self, parts: dict[str, str | None], _code: str) -> None:
+        expr = parts["expr"].strip() if parts["expr"] else ""
+        self.__cond_mngr.enter_if(expr not in self.macros)
 
     def __preproc_eval_expr(self, code: str) -> str:
         out_code = self.__eval_defined(code)
@@ -861,15 +861,15 @@ def run_console_app() -> None:
     args = argparser.parse_args(CLI_DEBUG_ARGS_LIST)
 
     log.config(args.verbosity)
-    pycpp = PyCpp()
+    neatcpp = NeatCpp()
     if args.incl_dirs is not None:
-        pycpp.add_include_dirs(*args.incl_dirs)
+        neatcpp.add_include_dirs(*args.incl_dirs)
     if args.silent is not None:
-        pycpp.process_files(*args.silent, global_output=False)
+        neatcpp.process_files(*args.silent, global_output=False)
     if args.exclude is not None:
-        pycpp.exclude_macros_files = args.exclude
-    pycpp.process_files(*args.in_files, global_output=True)
-    pycpp.save_output_to_file(args.out_file, args.full_output)
+        neatcpp.exclude_macros_files = args.exclude
+    neatcpp.process_files(*args.in_files, global_output=True)
+    neatcpp.save_output_to_file(args.out_file, args.full_output)
 
 
 if __name__ == "__main__":
