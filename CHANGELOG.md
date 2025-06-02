@@ -4,8 +4,8 @@
 
 ---
 
-This file documents all notable changes in the [pycpp](https://github.com/lubomilko/pycpp) -
-a C preprocessor in Python preserving the formatting of the original C source code.
+This file documents all notable changes in the [neatcpp](https://github.com/lubomilko/neatcpp) -
+a minimalistic C preprocessor in Python preserving the formatting of the original C source code.
 
 ---
 
@@ -13,6 +13,15 @@ a C preprocessor in Python preserving the formatting of the original C source co
 ## [unreleased] - 202y-mm-dd
 
 *List of modifications for a future release.*
+
+### Changed
+
+- Change project name from `pycpp` to `neatcpp` to avoid name collision on PyPI.
+
+### Fixed
+
+- Fix all *Pylance* and *Pylint* violations reported under Python 3.13 in all source files,
+  including tests and samples.
 
 
 ## [1.1.5] - 2025-05-31
@@ -65,9 +74,9 @@ a C preprocessor in Python preserving the formatting of the original C source co
 *First release*
 
 
-[unreleased]: https://github.com/lubomilko/pycpp
-[1.1.5]: https://github.com/lubomilko/pycpp/releases/tag/1.1.5
-[1.1.4]: https://github.com/lubomilko/pycpp/releases/tag/1.1.4
-[1.1.3]: https://github.com/lubomilko/pycpp/releases/tag/1.1.3
-[1.1.0]: https://github.com/lubomilko/pycpp/releases/tag/1.1.0
-[1.0.0]: https://github.com/lubomilko/pycpp/releases/tag/1.0.0
+[unreleased]: https://github.com/lubomilko/neatcpp
+[1.1.5]: https://github.com/lubomilko/neatcpp/releases/tag/1.1.5
+[1.1.4]: https://github.com/lubomilko/neatcpp/releases/tag/1.1.4
+[1.1.3]: https://github.com/lubomilko/neatcpp/releases/tag/1.1.3
+[1.1.0]: https://github.com/lubomilko/neatcpp/releases/tag/1.1.0
+[1.0.0]: https://github.com/lubomilko/neatcpp/releases/tag/1.0.0
