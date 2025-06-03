@@ -11,7 +11,7 @@ authors = [
 description = "A minimalistic C preprocessor preserving the original C code formatting"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "Copyright (C) 2025 Danfoss A/S"
+license = "LicenseRef-LICENSE"
 license-files = ["LICEN[CS]E*"]
 classifiers = [
     "Programming Language :: Python :: 3",
