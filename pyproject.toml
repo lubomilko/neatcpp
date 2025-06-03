@@ -11,7 +11,7 @@ authors = [
 description = "A minimalistic C preprocessor preserving the original C code formatting"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "LicenseRef-LICENSE"
+license = "GPL-3.0"
 license-files = ["LICEN[CS]E*"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -21,7 +21,7 @@ classifiers = [
 
 [project.urls]
 Repository = "https://github.com/lubomilko/neatcpp"
-Documentation = "https://github.com/lubomilko/neatcpp/blob/1.2.0/README.md"
+Documentation = "https://github.com/lubomilko/neatcpp/blob/main/README.md"
 Issues = "https://github.com/lubomilko/neatcpp/issues"
 
 [project.scripts]
