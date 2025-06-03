@@ -8,6 +8,24 @@ The neatcpp produces a code with formatting very close to the original code, i.e
 endings, intendantion and comments are preserved, even in the expanded macro bodies. It is also
 possible to keep the original preprocessor directives.
 
+
+# Installation
+
+The neatcpp package can be installed from the [Python Package Index](https://pypi.org/) using the
+following *pip* console command:
+
+```console
+pip install neatcpp
+```
+
+Alternatively, it is also possible to install the neatcpp package from a *\*.tar.gz* source
+distribution that can be downloaded from the *dist* directory:
+
+```console
+pip install neatcpp-<version>.tar.gz
+```
+
+
 # Usage
 
 ## Neatcpp as a Python module
