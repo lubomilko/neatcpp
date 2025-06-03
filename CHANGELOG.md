@@ -18,6 +18,10 @@ a minimalistic C preprocessor in Python preserving the formatting of the origina
 
 - Change project name from `pycpp` to `neatcpp` to avoid name collision on PyPI.
 
+### Added
+
+- Add binary distribution package in a *dist* directory.
+
 ### Fixed
 
 - Fix all *Pylance* and *Pylint* violations reported under Python 3.13 in all source files,
