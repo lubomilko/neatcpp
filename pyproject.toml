@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neatcpp"
+version = "1.2.0"
+authors = [
+    {name = "Lubomir Milko", email = "lubomir.milko@gmail.com"},
+]
+description = "A minimalistic C preprocessor preserving the original C code formatting"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0"
+license-files = ["LICEN[CS]E*"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers"
+]
+
+[project.urls]
+Repository = "https://github.com/lubomilko/neatcpp"
+Documentation = "https://github.com/lubomilko/neatcpp/blob/main/README.md"
+Issues = "https://github.com/lubomilko/neatcpp/issues"
+
+[project.scripts]
+neatcpp = "neatcpp.neatcpp:run_console_app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.distutils.egg_info]
+egg_base = ".build"

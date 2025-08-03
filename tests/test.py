@@ -1,3 +1,5 @@
+# pylint: disable=missing-module-docstring, missing-function-docstring
+
 from pathlib import Path
 import sys
 import pytest
@@ -7,9 +9,9 @@ CURR_DIR_PATH = Path(__file__).parent
 
 sys.path.append(str(Path(CURR_DIR_PATH, "../src").resolve()))
 
-
-from pycpp import PyCpp             # noqa: E402
-from pycpp import run_console_app   # noqa: E402
+# pylint: disable=wrong-import-position
+from neatcpp import NeatCpp             # noqa: E402
+from neatcpp import run_console_app     # noqa: E402
 
 
 def compare_files(gen_file: Path, exp_file: Path) -> bool:
@@ -23,9 +25,9 @@ def compare_files(gen_file: Path, exp_file: Path) -> bool:
 
 
 @pytest.fixture(scope="session")
-def pycpp():
-    pycpp = PyCpp()
-    return pycpp
+def ncpp():
+    preproc = NeatCpp()
+    return preproc
 
 
 TEST_PARAMS = [
@@ -45,22 +47,23 @@ TEST_PARAMS = [
      True)]
 
 
+# pylint: disable=redefined-outer-name
 @pytest.mark.parametrize("incl_dirs, excludes, files_silent, files_in, file_out, file_exp, full_output", TEST_PARAMS)
-def test_module(pycpp: PyCpp, incl_dirs: tuple[Path], excludes: list[str], files_silent: tuple[Path],
+def test_module(ncpp: NeatCpp, incl_dirs: tuple[Path], excludes: list[str], files_silent: tuple[Path],
                 files_in: tuple[Path], file_out: Path, file_exp: Path,
                 full_output: bool) -> None:
-    pycpp.reset()
+    ncpp.reset()
     # Set include dirs and process specified file.
     if incl_dirs:
-        pycpp.add_include_dirs(*incl_dirs)
+        ncpp.add_include_dirs(*incl_dirs)
     if excludes:
-        pycpp.exclude_macros_files = excludes
-    pycpp.process_files(*files_silent, global_output=False)
-    pycpp.process_files(*files_in, global_output=True)
+        ncpp.exclude_macros_files = excludes
+    ncpp.process_files(*files_silent, global_output=False)
+    ncpp.process_files(*files_in, global_output=True)
 
     # Remove existing output file and save the newest one.
     file_out.unlink(missing_ok=True)
-    pycpp.save_output_to_file(file_out, full_output)
+    ncpp.save_output_to_file(file_out, full_output)
 
     # Assert that the output file is the same as the expected file.
     assert compare_files(file_out, file_exp) is True
@@ -77,8 +80,8 @@ def test_script(monkeypatch, incl_dirs: tuple[Path], excludes: list[str], files_
     args.append(f"{file_out}")
     if incl_dirs:
         args.append("-i")
-        for dir in incl_dirs:
-            args.append(f"{dir}")
+        for incl_dir in incl_dirs:
+            args.append(f"{incl_dir}")
     if files_silent:
         args.append("-s")
         for file in files_silent:
