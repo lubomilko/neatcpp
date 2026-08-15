@@ -31,7 +31,7 @@ from pathlib import Path
 
 __author__ = "Lubomir Milko"
 __copyright__ = "Copyright (C) 2025 Lubomir Milko"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 __license__ = "GPLv3"
 __module_name__ = "neatcpp"
 __summary__ = "A minimalistic C preprocessor preserving the original C code formatting."
@@ -459,22 +459,29 @@ class NeatCpp():
         exclude_macros_files (list[str]): A list of user-defined macro names and file names to be excluded from processing.
             The ``#define`` and ``#include`` directives for the specified macros and files will not be processed.
     """
+
     def __init__(self) -> None:
+        re_hash = r"^[ \t]*#[ \t]*"
+        re_ident = r"[ \t]+(?P<ident>[a-zA-Z_]\w*)"
+        re_expr = r"[ \t]+(?P<expr>.*?)"
+        re_args = r"(?:\((?P<args>[^\)]*)\))?"
+        re_end = r"(?=\s*(?:$|(?://)|(?:/\*)))"
+
         self.__file_io: FileIO = FileIO()
         self.__output: PreprocOutput = PreprocOutput()
         self.__cond_mngr: ConditionManager = ConditionManager()
         self.__directives: tuple[tuple[Directive, ...], ...] = (
             # DirectiveGroup.STANDARD
-            (Directive(re.compile(r"^[ \t]*#[ \t]*define[ \t]+(?P<ident>\w+)(?:\((?P<args>[^\)]*)\))?", re.ASCII), self.__process_define),
-             Directive(re.compile(r"^[ \t]*#[ \t]*undef[ \t]+(?P<ident>\w+)", re.ASCII), self.__process_undef),
-             Directive(re.compile(r"^[ \t]*#[ \t]*include[ \t]+(?:\"|<)(?P<file>[^\">]+)(?:\"|>)", re.ASCII), self.__process_include)),
+            (Directive(re.compile(re_hash + r"define" + re_ident + re_args, re.ASCII), self.__process_define),
+             Directive(re.compile(re_hash + r"undef" + re_ident + re_end, re.ASCII), self.__process_undef),
+             Directive(re.compile(re_hash + r"include[ \t]+(?:\"|<)(?P<file>[^\">]+)(?:\"|>)", re.ASCII), self.__process_include)),
             # DirectiveGroup.CONDITIONAL
-            (Directive(re.compile(r"^[ \t]*#[ \t]*if[ \t]+(?P<expr>.*)", re.ASCII), self.__process_if),
-             Directive(re.compile(r"^[ \t]*#[ \t]*elif[ \t]+(?P<expr>.*)", re.ASCII), self.__process_elif),
-             Directive(re.compile(r"^[ \t]*#[ \t]*else(?:\s|$)", re.ASCII), self.__process_else),
-             Directive(re.compile(r"^[ \t]*#[ \t]*endif(?:\s|$)", re.ASCII), self.__process_endif),
-             Directive(re.compile(r"^[ \t]*#[ \t]*ifdef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifdef),
-             Directive(re.compile(r"^[ \t]*#[ \t]*ifndef[ \t]+(?P<expr>.*)", re.ASCII), self.__process_ifndef)))
+            (Directive(re.compile(re_hash + r"if" + re_expr + re_end, re.ASCII), self.__process_if),
+             Directive(re.compile(re_hash + r"elif" + re_expr + re_end, re.ASCII), self.__process_elif),
+             Directive(re.compile(re_hash + r"else" + re_end, re.ASCII), self.__process_else),
+             Directive(re.compile(re_hash + r"endif" + re_end, re.ASCII), self.__process_endif),
+             Directive(re.compile(re_hash + r"ifdef" + re_ident + re_end, re.ASCII), self.__process_ifdef),
+             Directive(re.compile(re_hash + r"ifndef" + re_ident + re_end, re.ASCII), self.__process_ifndef)))
         self.macros: dict[str, Macro] = {}
         self.exclude_macros_files: list[str] = []
 
@@ -771,12 +778,12 @@ class NeatCpp():
         self.__cond_mngr.exit_if()
 
     def __process_ifdef(self, parts: dict[str, str | None], _code: str) -> None:
-        expr = parts["expr"].strip() if parts["expr"] else ""
-        self.__cond_mngr.enter_if(expr in self.macros)
+        ident = parts["ident"].strip() if parts["ident"] else ""
+        self.__cond_mngr.enter_if(ident in self.macros)
 
     def __process_ifndef(self, parts: dict[str, str | None], _code: str) -> None:
-        expr = parts["expr"].strip() if parts["expr"] else ""
-        self.__cond_mngr.enter_if(expr not in self.macros)
+        ident = parts["ident"].strip() if parts["ident"] else ""
+        self.__cond_mngr.enter_if(ident not in self.macros)
 
     def __preproc_eval_expr(self, code: str) -> str:
         out_code = self.__eval_defined(code)
@@ -794,7 +801,7 @@ class NeatCpp():
             ident = match.group("ident")
             return " 1" if ident is not None and ident in self.macros else " 0"
 
-        return re.sub(r"(?:^|[ \t])defined[ \t]*\(?\s*(?P<ident>\w+)[ \t]*\)?",
+        return re.sub(r"(?:^|[ \t])defined[ \t]*\(?\s*(?P<ident>[a-zA-Z_]\w*)[ \t]*\)?",
                       repl_defined, code, count=0, flags=re.ASCII + re.MULTILINE)
 
     def __get_macro_ident_pos(self, code: str, macro_ident: str, has_args: bool = False) -> int:
