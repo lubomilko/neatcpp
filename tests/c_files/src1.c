@@ -89,19 +89,19 @@ IGN_MACRO_FUNC(bana, na)
 
 #define A   101u
 
-#if A > 1u
-    #if A > 100
+#if A > 1u/*comment*/
+    #if A > 100//comment
         #define B(X)  X + A * 100u
     #elif A > 10
         #define B(X)  X + A * 10u
-    #else
+    #else//comment
         #define B(X)  X + A
     #endif
 #elif A == 0u
     #define B(X)  X
-#else
+#else /* comment */
     #define B(X)  X - A
-#endif
+#endif/*comment*/
 
 B(5)    /* Expected: 5 + 101u * 100u */
 
@@ -109,7 +109,7 @@ B(5)    /* Expected: 5 + 101u * 100u */
 
 #define A   12u
 
-#if A > 1u
+#if A > 1u // comment
     #if A > 100
         #define B(X)  X + A * 100u
     #elif A > 10
@@ -117,7 +117,7 @@ B(5)    /* Expected: 5 + 101u * 100u */
     #else
         #define B(X)  X + A
     #endif
-#elif A == 0u
+#elif A == 0u/* comment*/
     #define B(X)  X
 #else
     #define B(X)  X - A
@@ -132,7 +132,7 @@ B(5)    /* Expected: 5 + 12u * 10u */
 #if A > 1u
     #if A > 100
         #define B(X)  X + A * 100u
-    #elif A > 10
+    #elif A > 10 /* comment */
         #define B(X)  X + A * 10u
     #else
         #define B(X)  X + A
