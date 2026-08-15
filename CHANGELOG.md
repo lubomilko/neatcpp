@@ -15,6 +15,16 @@ a minimalistic C preprocessor in Python preserving the formatting of the origina
 *List of modifications for a future release.*
 
 
+## [1.2.1] - 2026-08-15
+
+*Fix detection of conditional directives followed closely by comments.*
+
+### Fixed
+
+- Fix detection of conditional compilation directives if the expressions in them are immediately
+  followed by comments without any whitespace characters.
+
+
 ## [1.2.0] - 2025-06-03
 
 ### Changed
@@ -82,6 +92,7 @@ a minimalistic C preprocessor in Python preserving the formatting of the origina
 
 
 [unreleased]: https://github.com/lubomilko/neatcpp
+[1.2.1]: https://github.com/lubomilko/neatcpp/releases/tag/1.2.1
 [1.2.0]: https://github.com/lubomilko/neatcpp/releases/tag/1.2.0
 [1.1.5]: https://github.com/lubomilko/neatcpp/releases/tag/1.1.5
 [1.1.4]: https://github.com/lubomilko/neatcpp/releases/tag/1.1.4
